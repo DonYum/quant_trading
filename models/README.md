@@ -65,86 +65,9 @@
 models                  # 存放mongoDB对应的schema/model
 ├── __init__.py           # 用于暴露model接口
 ├── migrate               # 用于**数据迁移**
-│   ├── create_testdb.py    # 创建测试数据库
-│   ├── migrate_img.py      # 迁移Image数据
-│   └── migrate_anno.py     # 迁移Annotation数据
-├── db_v1                 # 旧版本schema
-│   ├── __init__.py
-│   ├── annotation.py
-│   └── image.py
 ├── dbs                 # 新版本schema
 │   ├── __init__.py         # 初始化工作、暴露接口
-│   ├── image_anno.py         # **当前使用的schema**
-│   ├── image.py
-│   ├── import_task.py        # 导入任务管理
-│   ├── label.py              # 标注model
-│   ├── prelabel.py           # 预标model
-│   ├── label_task.py         # 预标、标注任务管理
-│   ├── outer_tabs.py         # 外部约束表，比如src、cat、tags等
-│   ├── schema_templ.py       # schema模版，用于指导设计，实际使用中不起作用。
-│   ├── version.py            # 版本信息
-│   └── worldtree.py          # worldtree
-├── perf_anal             # 性能量化数据
 └── README.md
-```
-
-## 关于命名规则
-
-为了规范model名称、方便区分Document和EmbededDocument，命名规则如下：
-
-1. model使用驼峰命名；
-2. 使用“xxxDoc”和“xxxEmDoc”区分Document和EmbededDocument，Document有save方法，EmbededDocument必须嵌入到Document中去使用；
-3. 有从属关系的会将所属class名称放置到前面，比如LabelAttrEmDoc从属于LabelEmDoc；
-
-### 按照此命名规则得到的数据结构class——
-
-```python
-'ImageAnnoDoc',
-    'ImageEmDoc',
-    'PreLabelEmDoc',
-        'Pl_YoutuEmDoc',
-        'Pl_SsdEmDoc',
-        'Pl_QualEmDoc',
-    'LabelEmDoc',
-        'LabelKpEmDoc',
-        'LabelObjDetEmDoc',
-        'LabelClsEmDoc',
-        'LabelMultiEmDoc',
-        'LabelAttrEmDoc',
-            'LabelAttrFaceEmDoc',
-            'LabelAttrBagEmDoc',
-            'LabelAttrCatEmDoc',
-    'PreLabelingEmDoc',
-    'LabelingEmDoc'
-
-# 导入、标记、预标任务管理
-'ImportTaskDoc',
-'PreLabelTaskDoc',
-'LabelTaskDoc',
-
-# 约束表
-'SourceDoc',
-'CategoryDoc',
-'TypeDoc',
-'DataSetDoc',
-```
-
-## 新老数据模型使用方法
-
-### 调用方法
-
-调用最新数据模型：
-
-```python
-from models import *
-# 或
-from models.dbs import *
-```
-
-调用老的数据模型：
-
-```python
-from models.db_v1 import *
 ```
 
 ### 数据库连接
@@ -159,40 +82,17 @@ from models.db_v1 import *
 
 ```python
 import mongoengine
-from http_service.models.dbs import *
+from models.dbs import *
 
-URI_v2 = 'mongodb://orion:orion2019@10.60.242.96:20000,10.60.242.97:20000,10.60.242.98:20000/data_pf?authSource=admin&readPreference=secondaryPreferred'
-connect(host=URI_v2,  alias='dbs', connect=False)
+URI_ticks = 'mongodb://127.0.0.1:6007/ticks'
+URI_kline = 'mongodb://127.0.0.1:6007/kline'
+connect(host=URI_ticks,  alias='ticks')
+connect(host=URI_kline,  alias='kline')
 
-imgs = ImageAnnoDoc.objects(category='face')
-print(imgs.count())   # 获取category='face'的记录数。具体操作方式请参看mongoengine资料。
+cu_doc = get_dyn_ticks_doc('CU')
+res = cu_doc.objects()
+print(res.count())   # 获取'CU'合约的记录数。
 ```
-
-老数据库（已废弃）：
-
-```python
-import mongoengine
-from http_service.models.db_v1 import *
-
-URI_v1 = 'mongodb://orion:orion2019@10.60.242.96:20000,10.60.242.97:20000,10.60.242.98:20000/data_manager?authSource=admin&readPreference=secondaryPreferred'
-connect(host=URI_v1,  alias='db_v1', connect=False)
-```
-
-其中`alias='db_v1'`对应于老数据模型，`alias='dbs'`对应于新数据模型。
-
-#### Ceph
-
-```python
-from http_service.models.ceph import CephS3
-
-md5 = '62ae831bc75e24c4e3ed4d8a4f3d2980'        # md5对应于MongoDB的ImageAnnoDoc.image.md5
-ceph_s3 = CephS3('/mnt/cephfs_online/ceph_bk_storage')
-img_content = ceph_s3.read(md5)
-```
-
-## 数据迁移
-
-详见`/modelsmigrate/README.md`
 
 ## 其他细节
 
@@ -239,10 +139,6 @@ Ref:
 - <https://github.com/MongoEngine/mongoengine/issues/943>
 - <https://stackoverflow.com/questions/6590890/how-to-limit-number-of-updating-documents-in-mongodb>
 
-### 关于ceph图片备份
-
-请参考`backuped@ImageEmDoc`字段。
-
 ### 关于递增ID做主键的设置
 
 默认的情况会使用objectID，但该字段太重，在存储少量信息的情况下，使用递增ID即可。<br>
@@ -268,31 +164,7 @@ Ref:
 
 ### V1
 
-根据大家的意见初步设计了数据结构，img和anno分开，见`schema_templ.py`。
-
-### V2
-
-根据自己的测试结果，发现img和anno分开存储最大的问题是关联查询。另外，img和anno是明确的包含关系，完全可以存储到一起！
-
-### V3
-
-2018.07.27：对label结构做了大调整。
-
-调整是基于下面前提进行的：
-
-1. 对于人脸多属性、keypoint数据来讲，都是局部图，只会存在一个关键要素（人脸或身体）（bbox不存也没关系），上传数据的时候会先抠图处理；
-2. 对于物体检测数据来讲，是同时存在多个对象的（人脸、身体、水果、动物等），是一个`bbox+tag+label`串。
-
-    调整的内容包括：
-    1. 使用规范化的bbox——[x1, y1, x2, y2] + width + conf，注意一下conf的值=2说明没有设置conf。使用`norm_bbox()`生成即可；
-    2. Label中包含两类数据类型——局部图对应的标签（人脸多属性、keypoint等数据）、多物体数据（物体检测等）。
-
-2018.08.01（和振辉讨论）：关于label结构的制定，需要明确的是——要考虑数据存储的抽象层面，数据接口或任务种类是一种检验标准（是否能cover住）。
-
-## 备注
-
-非常欢迎大家提需求。
-感谢。
+分为ticks和kline两个库，都使用了分表存储。ticks根据合约分表，kline根据粒度分表。
 
 ## 参考：
 
@@ -303,5 +175,3 @@ Ref:
 - 关于性能：<https://blog.csdn.net/xtj332/article/details/41314741>
 
 ## TODOs
-
-2018.09.15：自动导入完成后需要执行一下`update_src_cat_stat_tab(...)`来更新关联表。
