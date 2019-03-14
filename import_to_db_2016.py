@@ -76,7 +76,7 @@ if __name__ == "__main__":
         dir_cnt += 1
 
         # 9999是主力，0000是指数
-        if subdir.stem[-4:] in ['0000', '9999', '1707', '1611', 'CU1602',
+        if subdir.stem[-4:] in ['0000', '9999', '1707', '1611', '1602',
                                 '1610', '1612', '1701', '1712', '1609', '1605', '1601']:
             logger.info(f'[{dir_cnt}/{dir_num}]: Ignore {subdir}!')
             continue
@@ -102,12 +102,12 @@ if __name__ == "__main__":
                     continue
 
             if not dbg:
-                try:
-                    for i in range(pd_data.shape[0]):
+                for i in range(pd_data.shape[0]):
+                    try:
                         d_doc(**pd_data.iloc[i]).save()
-                except Exception:
-                    logger.error(f'Exception: {_file}', exc_info=1)
-                    raise
+                    except Exception:
+                        logger.error(f'Exception: {_file}: Line={cnt}. {pd_data.iloc[i]}')
+                        continue
 
                 exec_time = time.time() - st
                 if print_cnt >= 20 or exec_time > 80:

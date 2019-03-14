@@ -101,12 +101,12 @@ if __name__ == "__main__":
                     continue
 
             if not dbg:
-                try:
-                    for i in range(pd_data.shape[0]):
+                for i in range(pd_data.shape[0]):
+                    try:
                         d_doc(**pd_data.iloc[i]).save()
-                except Exception:
-                    logger.error(f'Exception: {_file}', exc_info=1)
-                    raise
+                    except Exception:
+                        logger.error(f'Exception: {_file}: Line={cnt}. {pd_data.iloc[i]}')
+                        continue
 
                 exec_time = time.time() - st
                 if print_cnt >= 20 or exec_time > 80:
