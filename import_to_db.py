@@ -64,26 +64,41 @@ if __name__ == "__main__":
     dbg = True
 
     base_dir = Path('/home/history_data/tick/2015/4/CU/')
+    dir_num = len(list(base_dir.iterdir()))
 
     d_doc = get_dyn_ticks_doc('CU')
 
-    res = base_dir.glob('*/*/*/*.spt')
-    res = list(res)
-    total = len(res)
+    dir_cnt = 0
+    for subdir in base_dir.iterdir():
+        dir_cnt += 1
 
-    cnt = 0
-    st = time.time()
-    for _file in res:
-        cnt += 1
-        try:
-            pd_data = load_df(_file)
-        except Exception:
-            logger.error(f'{_file}', exc_info=1)
-            raise
+        # 9999是主力，0000是指数
+        if subdir.stem[-4:] in ['0000', '9999']:
+            continue
 
-        if not dbg:
-            for i in range(pd_data.shape[0]):
-                d_doc(**pd_data.iloc[i]).save()
+        res = subdir.glob('*/*/*.spt')
+        res = list(res)
+        total = len(res)
+        # res = base_dir.glob('*/*/*/*.spt')
+        # res = list(res)
+        # total = len(res)
 
-            logger.info(f'[{cnt}/{total}]: {_file}: Time={"%.1fs" % (time.time() - st)}')
-            st = time.time()
+        cnt = 0
+        st = time.time()
+        for _file in res:
+            cnt += 1
+            try:
+                pd_data = load_df(_file)
+            except Exception:
+                if dbg:
+                    logger.error(f'{_file}', exc_info=0)
+                else:
+                    logger.error(f'{_file}', exc_info=1)
+                    raise
+
+            if not dbg:
+                for i in range(pd_data.shape[0]):
+                    d_doc(**pd_data.iloc[i]).save()
+
+                logger.info(f'[{dir_cnt}/{dir_num}] [{cnt}/{total}]: {_file}: Time={"%.1fs" % (time.time() - st)}')
+                st = time.time()
