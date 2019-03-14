@@ -109,7 +109,7 @@ if __name__ == "__main__":
                     raise
 
                 exec_time = time.time() - st
-                if print_cnt > 20 or exec_time > 80:
+                if print_cnt >= 20 or exec_time > 80:
                     logger.info(f'[{dir_cnt}/{dir_num}][{cnt}/{total}]: subdir={subdir}, spt_cnt={spt_cnt}, Time={"%.1fs" % exec_time}')
                     st = time.time()
                     print_cnt = 0

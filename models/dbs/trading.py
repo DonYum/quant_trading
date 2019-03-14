@@ -13,10 +13,12 @@ def get_dyn_ticks_doc(_collection_name):
             'collection': f'ticks_{_collection_name}',
             'db_alias': 'ticks',
             'index_background': True,
-            'auto_create_index': True,          # 每次操作都检查。TODO: Disabling this will improve performance.
+            'auto_create_index': False,          # 每次操作都检查。TODO: Disabling this will improve performance.
             'indexes': [
                 'InstrumentID',
                 'MarketID',
+                'LastPrice',
+                'LastVolume',
                 'UpdateTime',
             ]
         }
@@ -28,7 +30,7 @@ def get_dyn_ticks_doc(_collection_name):
         MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
 
         LastPrice = FloatField()                # 最新价
-        LastVolume = FloatField(default=0.0)    # 现量
+        LastVolume = FloatField()    # 现量
 
         hhmmss = StringField()                  # 时间(6位,时分秒 hhmmss)
         UpdateTime = DateTimeField()

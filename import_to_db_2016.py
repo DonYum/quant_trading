@@ -63,7 +63,7 @@ if __name__ == "__main__":
     dbg = False
     dbg = True
 
-    base_dir = Path('/home/history_data/tick/2015/4/CU/')
+    base_dir = Path('/home/history_data/tick/2016/4/CU/')
     dir_num = len(list(base_dir.iterdir()))
 
     d_doc = get_dyn_ticks_doc('CU')
@@ -76,7 +76,8 @@ if __name__ == "__main__":
         dir_cnt += 1
 
         # 9999是主力，0000是指数
-        if subdir.stem[-4:] in ['0000', '9999', '1611', '1502', '1511']:
+        if subdir.stem[-4:] in ['0000', '9999', '1707', '1611', 'CU1602',
+                                '1610', '1612', '1701', '1712', '1609', '1605', '1601']:
             logger.info(f'[{dir_cnt}/{dir_num}]: Ignore {subdir}!')
             continue
 
