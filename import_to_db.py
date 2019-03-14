@@ -69,6 +69,8 @@ if __name__ == "__main__":
     d_doc = get_dyn_ticks_doc('CU')
 
     dir_cnt = 0
+    spt_cnt = 0
+    print_cnt = 0
     st_dir = time.time()
     for subdir in base_dir.iterdir():
         dir_cnt += 1
@@ -85,22 +87,27 @@ if __name__ == "__main__":
         st = time.time()
         for _file in res:
             cnt += 1
+            spt_cnt += 1
+            print_cnt += 1
             try:
                 pd_data = load_df(_file)
             except Exception:
                 if dbg:
                     logger.error(f'{_file}', exc_info=0)
                 else:
-                    logger.error(f'{_file}', exc_info=1)
-                    raise
+                    logger.error(f'Exception: {_file}', exc_info=1)
+                    continue
 
             if not dbg:
                 for i in range(pd_data.shape[0]):
                     d_doc(**pd_data.iloc[i]).save()
 
-                logger.info(f'[{dir_cnt}/{dir_num}] [{cnt}/{total}]: {_file}: Time={"%.1fs" % (time.time() - st)}')
-                st = time.time()
+                exec_time = time.time() - st
+                if print_cnt > 20 or exec_time > 80:
+                    logger.info(f'[{dir_cnt}/{dir_num}] [{cnt}/{total}]: spt_cnt={spt_cnt}, Time={"%.1fs" % exec_time}')
+                    st = time.time()
+                    print_cnt = 0
 
-        if not dbg:
-            logger.info(f'[{dir_cnt}/{dir_num}] {subdir}: Time={"%.1fs" % (time.time() - st_dir)}')
+        if dbg:
+            logger.info(f'[{dir_cnt}/{dir_num}]: {subdir}: spt_cnt={spt_cnt}, Time={"%.1fs" % (time.time() - st_dir)}')
             st_dir = time.time()
