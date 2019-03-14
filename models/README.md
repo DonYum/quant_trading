@@ -84,7 +84,7 @@ models                  # 存放mongoDB对应的schema/model
 import mongoengine
 from models.dbs import *
 
-URI_ticks = 'mongodb://127.0.0.1:6007/ticks'
+URI_ticks = 'mongodb://127.0.0.1:6007/ticks'      # 外网是：171.8.2.26:19132
 URI_kline = 'mongodb://127.0.0.1:6007/kline'
 connect(host=URI_ticks,  alias='ticks')
 connect(host=URI_kline,  alias='kline')
