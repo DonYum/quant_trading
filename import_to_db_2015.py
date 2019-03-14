@@ -77,8 +77,10 @@ if __name__ == "__main__":
 
         # 9999是主力，0000是指数
         if subdir.stem[-4:] in ['0000', '9999', '1611', '1502', '1511']:
+            logger.info(f'[{dir_cnt}/{dir_num}]: Ignore {subdir}!')
             continue
 
+        logger.info(f'[{dir_cnt}/{dir_num}]: Process {subdir}.')
         res = subdir.glob('*/*/*.spt')
         res = list(res)
         total = len(res)
@@ -99,12 +101,16 @@ if __name__ == "__main__":
                     continue
 
             if not dbg:
-                for i in range(pd_data.shape[0]):
-                    d_doc(**pd_data.iloc[i]).save()
+                try:
+                    for i in range(pd_data.shape[0]):
+                        d_doc(**pd_data.iloc[i]).save()
+                except Exception:
+                    logger.error(f'Exception: {_file}', exc_info=1)
+                    raise
 
                 exec_time = time.time() - st
                 if print_cnt > 20 or exec_time > 80:
-                    logger.info(f'[{dir_cnt}/{dir_num}] [{cnt}/{total}]: spt_cnt={spt_cnt}, Time={"%.1fs" % exec_time}')
+                    logger.info(f'[{dir_cnt}/{dir_num}][{cnt}/{total}]: subdir={subdir}, spt_cnt={spt_cnt}, Time={"%.1fs" % exec_time}')
                     st = time.time()
                     print_cnt = 0
 
