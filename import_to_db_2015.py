@@ -76,7 +76,7 @@ if __name__ == "__main__":
         dir_cnt += 1
 
         # 9999是主力，0000是指数
-        if subdir.stem[-4:] in ['0000', '9999', '1611', '1502', '1511']:
+        if subdir.stem[-4:] in ['0000', '9999', '1611', '1502', '1511', '1602', '1509', '1610']:
             logger.info(f'[{dir_cnt}/{dir_num}]: Ignore {subdir}!')
             continue
 
