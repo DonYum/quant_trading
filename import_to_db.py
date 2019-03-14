@@ -63,57 +63,60 @@ if __name__ == "__main__":
     dbg = False
     dbg = True
 
-    base_dir = Path('/home/history_data/tick/2015/4/CU/')
-    dir_num = len(list(base_dir.iterdir()))
+    cat = 'HC'
+    d_doc = get_dyn_ticks_doc(cat)
 
-    d_doc = get_dyn_ticks_doc('CU')
+    for year in ['2014', '2015', '2016', '2017', '2018_whole']:
+        base_dir = Path(f'/home/history_data/tick/{year}/4/{cat}/')
+        dir_num = len(list(base_dir.iterdir()))
+        logger.info(f'[{year}-{cat}]: dir_num={dir_num}].')
 
-    dir_cnt = 0
-    spt_cnt = 0
-    print_cnt = 0
-    st_dir = time.time()
-    for subdir in base_dir.iterdir():
-        dir_cnt += 1
+        dir_cnt = 0
+        spt_cnt = 0
+        print_cnt = 0
+        st_dir = time.time()
+        for subdir in base_dir.iterdir():
+            dir_cnt += 1
 
-        # 9999是主力，0000是指数
-        if subdir.stem[-4:] in ['0000', '9999']:
-            logger.info(f'[{dir_cnt}/{dir_num}]: Ignore {subdir}!')
-            continue
+            # 9999是主力，0000是指数
+            if subdir.stem[-4:] in ['0000', '9999']:
+                logger.info(f'[{year}][{dir_cnt}/{dir_num}]: Ignore {subdir}!')
+                continue
 
-        logger.info(f'[{dir_cnt}/{dir_num}]: Process {subdir}.')
-        res = subdir.glob('*/*/*.spt')
-        res = list(res)
-        total = len(res)
+            res = subdir.glob('*/*/*.spt')
+            res = list(res)
+            total = len(res)
+            logger.info(f'[{year}][{dir_cnt}/{dir_num}]: Process {subdir}, total={total}.')
 
-        cnt = 0
-        st = time.time()
-        for _file in res:
-            cnt += 1
-            spt_cnt += 1
-            print_cnt += 1
-            try:
-                pd_data = load_df(_file)
-            except Exception:
-                if dbg:
-                    logger.error(f'{_file}', exc_info=0)
-                else:
-                    logger.error(f'Exception: {_file}', exc_info=1)
-                    continue
-
-            if not dbg:
-                for i in range(pd_data.shape[0]):
-                    try:
-                        d_doc(**pd_data.iloc[i]).save()
-                    except Exception:
-                        logger.error(f'Exception: {_file}: Line={cnt}. {pd_data.iloc[i]}')
+            cnt = 0
+            st = time.time()
+            for _file in res:
+                cnt += 1
+                spt_cnt += 1
+                print_cnt += 1
+                try:
+                    pd_data = load_df(_file)
+                except Exception:
+                    if dbg:
+                        logger.error(f'{_file}', exc_info=0)
+                    else:
+                        logger.error(f'[{year}] Exception: {_file}', exc_info=1)
                         continue
 
-                exec_time = time.time() - st
-                if print_cnt >= 20 or exec_time > 80:
-                    logger.info(f'[{dir_cnt}/{dir_num}][{cnt}/{total}]: subdir={subdir}, spt_cnt={spt_cnt}, Time={"%.1fs" % exec_time}')
-                    st = time.time()
-                    print_cnt = 0
+                if not dbg:
+                    for i in range(pd_data.shape[0]):
+                        try:
+                            d_doc(**pd_data.iloc[i]).save()
+                        except Exception:
+                            logger.error(f'[{year}] Exception: {_file}: Line={cnt}. {pd_data.iloc[i]}')
+                            continue
 
-        if dbg:
-            logger.info(f'[{dir_cnt}/{dir_num}]: {subdir}: spt_cnt={spt_cnt}, Time={"%.1fs" % (time.time() - st_dir)}')
-            st_dir = time.time()
+                    exec_time = time.time() - st
+                    if print_cnt >= 20 or exec_time > 80:
+                        logger.info(f'[{year}][{dir_cnt}/{dir_num}][{cnt}/{total}]: subdir={subdir}, spt_cnt={spt_cnt}, Time={"%.1fs" % exec_time}')
+                        st = time.time()
+                        print_cnt = 0
+
+            if dbg:
+                logger.info(f'[{year}][{dir_cnt}/{dir_num}]: {subdir}: spt_cnt={spt_cnt}, Time={"%.1fs" % (time.time() - st_dir)}')
+                st_dir = time.time()
