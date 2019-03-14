@@ -69,6 +69,7 @@ if __name__ == "__main__":
     d_doc = get_dyn_ticks_doc('CU')
 
     dir_cnt = 0
+    st_dir = time.time()
     for subdir in base_dir.iterdir():
         dir_cnt += 1
 
@@ -79,9 +80,6 @@ if __name__ == "__main__":
         res = subdir.glob('*/*/*.spt')
         res = list(res)
         total = len(res)
-        # res = base_dir.glob('*/*/*/*.spt')
-        # res = list(res)
-        # total = len(res)
 
         cnt = 0
         st = time.time()
@@ -102,3 +100,7 @@ if __name__ == "__main__":
 
                 logger.info(f'[{dir_cnt}/{dir_num}] [{cnt}/{total}]: {_file}: Time={"%.1fs" % (time.time() - st)}')
                 st = time.time()
+
+        if not dbg:
+            logger.info(f'[{dir_cnt}/{dir_num}] {subdir}: Time={"%.1fs" % (time.time() - st_dir)}')
+            st_dir = time.time()
