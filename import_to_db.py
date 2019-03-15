@@ -68,6 +68,9 @@ if __name__ == "__main__":
 
     for year in ['2014', '2015', '2016', '2017', '2018_whole']:
         base_dir = Path(f'/home/history_data/tick/{year}/4/{cat}/')
+        if not base_dir.exists():
+            continue
+
         dir_num = len(list(base_dir.iterdir()))
         logger.info(f'[{year}-{cat}]: dir_num={dir_num}].')
 

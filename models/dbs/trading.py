@@ -1,13 +1,21 @@
 import datetime
+import logging
 from mongoengine import *
 
 __all__ = (
         'get_dyn_ticks_doc', 'get_dyn_kline_doc',
     )
 
+STORED_CATEGORY_LIST = ['AL', 'BU', 'CU', 'FU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'ZN']
+
+# logger = logging.getLogger()
+
 
 # tick数据集。实现分表存储。
 def get_dyn_ticks_doc(_collection_name):
+    if _collection_name not in STORED_CATEGORY_LIST:
+        raise Exception(f'Can not get ticks table[{_collection_name}].')
+
     class TicksDoc(Document):
         meta = {
             'collection': f'ticks_{_collection_name}',
@@ -82,6 +90,9 @@ def get_dyn_ticks_doc(_collection_name):
 
 # K线数据集。实现分表存储。
 def get_dyn_kline_doc(_collection_name):
+    if _collection_name not in STORED_CATEGORY_LIST:
+        raise Exception(f'Can not get kline table[{_collection_name}].')
+
     class KlineDoc(Document):
         meta = {
             'collection': f'kline_{_collection_name}',
