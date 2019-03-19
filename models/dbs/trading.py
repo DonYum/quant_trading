@@ -3,10 +3,10 @@ import logging
 from mongoengine import *
 
 __all__ = (
-        'get_dyn_ticks_doc', 'get_dyn_kline_doc',
+        'get_dyn_ticks_doc', 'get_dyn_kline_doc', 'STORED_CATEGORY_LIST',
     )
 
-STORED_CATEGORY_LIST = ['AL', 'BU', 'CU', 'FU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'ZN']
+STORED_CATEGORY_LIST = ['AL', 'BU', 'CU', 'FU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'ZN', 'AG', 'AU', 'WR']
 
 # logger = logging.getLogger()
 
@@ -28,6 +28,7 @@ def get_dyn_ticks_doc(_collection_name):
                 'LastPrice',
                 'LastVolume',
                 'UpdateTime',
+                'tags',
             ]
         }
         # id = SequenceField(db_alias='ticks', primary_key=True)
@@ -42,6 +43,7 @@ def get_dyn_ticks_doc(_collection_name):
 
         hhmmss = StringField()                  # 时间(6位,时分秒 hhmmss)
         UpdateTime = DateTimeField()
+        tags = ListField(StringField())         # 标记信息
 
         AskPrice1 = FloatField()
         AskVolume1 = IntField()
