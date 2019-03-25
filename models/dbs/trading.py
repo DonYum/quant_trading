@@ -229,19 +229,23 @@ class StatisDayDoc(Document):
     subID = StringField()                   # 子代码(日期)
     MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
 
-    TotalVolume = FloatField()              # 总成交量
-
     tags = ListField(StringField())         # 标记信息
 
     isDominant = BooleanField(default=False)   # 是否是主力合约
 
-    Turnover = FloatField()                 # 成交总额
-    AvePrice = FloatField()                 # 均价
+    TotalVolume = FloatField()              # 总成交量
 
+    # LastPrice = FloatField()                # 最新价
+    # LastVolume = FloatField(default=0.0)    # 现量
+
+    OpenPrice = FloatField()                # 开盘价
     HighestPrice = FloatField()             # 最高价
     LowestPrice = FloatField()              # 最低价
-    # SettlePrice = FloatField()              # 结算价
-    OpenPrice = FloatField()                # 开盘价
+    SettlePrice = FloatField()              # 收盘价
+    # Volume1 = IntField()                  # 成交量
+    OpenInterest = IntField()               # 持仓量
+    Turnover = FloatField()                 # 成交总额
+    AvePrice = FloatField()                 # 均价
 
     # @queryset_manager
     # def valid(doc_cls, queryset):
