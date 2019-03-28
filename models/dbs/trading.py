@@ -182,10 +182,16 @@ def get_dyn_kline_doc(_collection_name):
         # hhmmss = StringField()                  # 时间(6位,时分秒 hhmmss)
         UpdateTime = DateTimeField()
 
+        open = FloatField()                # 开盘价
+        high = FloatField()             # 最高价
+        low = FloatField()              # 最低价
+        close = FloatField()              # 收盘价
+
         OpenPrice = FloatField()                # 开盘价
         HighestPrice = FloatField()             # 最高价
         LowestPrice = FloatField()              # 最低价
-        SettlePrice = FloatField()              # 收盘价
+        # SettlePrice = FloatField()              # 收盘价
+
         # Volume1 = IntField()                  # 成交量
         OpenInterest = IntField()               # 持仓量
         Turnover = FloatField()                 # 成交总额
@@ -222,11 +228,11 @@ class StatisDayDoc(Document):
     }
     # id = SequenceField(db_alias='ticks', primary_key=True)
 
-    day = StringField()                     # 时间
+    day = DateTimeField()                     # 时间
 
     InstrumentID = StringField()            # 合约代码
     category = StringField()                # 合约品种
-    subID = StringField()                   # 子代码(日期)
+    # subID = StringField()                   # 子代码(日期)
     MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
 
     tags = ListField(StringField())         # 标记信息
@@ -234,15 +240,23 @@ class StatisDayDoc(Document):
     isDominant = BooleanField(default=False)   # 是否是主力合约
 
     TotalVolume = FloatField()              # 总成交量
+    volume_std = FloatField()              # 成交量std
 
     # LastPrice = FloatField()                # 最新价
     # LastVolume = FloatField(default=0.0)    # 现量
 
+    # OHLC结果
+    open = FloatField()                # 开盘价
+    high = FloatField()             # 最高价
+    low = FloatField()              # 最低价
+    close = FloatField()              # 收盘价
+
+    # ticks数据里统计到的值，和OHLC数据有出入。实际应用看情况使用。
     OpenPrice = FloatField()                # 开盘价
     HighestPrice = FloatField()             # 最高价
     LowestPrice = FloatField()              # 最低价
-    SettlePrice = FloatField()              # 收盘价
-    # Volume1 = IntField()                  # 成交量
+    # SettlePrice = FloatField()              # 收盘价
+
     OpenInterest = IntField()               # 持仓量
     Turnover = FloatField()                 # 成交总额
     AvePrice = FloatField()                 # 均价
