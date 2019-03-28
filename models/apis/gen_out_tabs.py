@@ -1,8 +1,8 @@
 import logging
 import time
 from .fields_statics import get_doc_statics
-from ..dbs.image_anno import ImageAnnoDoc
-from ..dbs.outer_tabs import *
+# from ..dbs.image_anno import ImageAnnoDoc
+# from ..dbs.outer_tabs import *
 
 logger = logging.getLogger(__name__)
 

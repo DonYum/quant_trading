@@ -3,7 +3,7 @@ import json
 import logging
 from collections import OrderedDict
 
-from ..dbs.image_anno import ImageAnnoDoc
+# from ..dbs.image_anno import ImageAnnoDoc
 
 __all__ = ('get_doc_statics', )
 
@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 #   - sample_size: int. 采样大小，加速运算。默认为0，表示不采样。
 # return:
 #   - generator
-def get_doc_statics(query_filter, fields, document=ImageAnnoDoc, unwind=None, sum_field=None, preserveNull=True, sample_size=0, sort=True, dbg=False):
+def get_doc_statics(query_filter, fields, document=None, unwind=None, sum_field=None, preserveNull=True, sample_size=0, sort=True, dbg=False):
     # 使用有序字典排序
     proj1 = OrderedDict()
     proj2 = OrderedDict()

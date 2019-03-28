@@ -1,7 +1,7 @@
 import os
 import time
 import logging
-from ..dbs.image_anno import ImageAnnoDoc
+# from ..dbs.image_anno import ImageAnnoDoc
 from .gen_out_tabs import update_all_related_src_cat_tab
 
 __all__ = ('Dbg_Timer', 'get_md5_from_url', 'gen_img_url', 'process_imgs', 'parallel_process_grps', )
