@@ -166,20 +166,20 @@ def get_dyn_kline_doc(_collection_name):
             'index_background': True,
             'auto_create_index': True,          # 每次操作都检查。TODO: Disabling this will improve performance.
             'indexes': [
+                'TradingTime',
                 'InstrumentID',
                 'MarketID',
-                'UpdateTime',
             ]
         }
         TradingTime = DateTimeField()
 
         InstrumentID = StringField()            # 合约代码
         category = StringField()                # 合约品种
-        subcat = StringField()                  # 交易品种
+        # subcat = StringField()                  # 交易品种
         MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
 
-        LastPrice = FloatField()                # 最新价
-        LastVolume = FloatField(default=0.0)    # 现量
+        TotalVolume = FloatField()              # 总成交量
+        volume_std = FloatField()              # 成交量std
 
         # hhmmss = StringField()                  # 时间(6位,时分秒 hhmmss)
 
@@ -218,7 +218,7 @@ class StatisDayDoc(Document):
         'index_background': True,
         'auto_create_index': True,          # 每次操作都检查。TODO: Disabling this will improve performance.
         'indexes': [
-            'day',
+            'TradingTime',
             'InstrumentID',
             'category',
             # 'subID',
@@ -233,24 +233,22 @@ class StatisDayDoc(Document):
 
     InstrumentID = StringField()            # 合约代码
     category = StringField()                # 合约品种
-    # subID = StringField()                   # 子代码(日期)
+    # subID = StringField()                 # 子代码(日期)
     MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
 
-    tags = ListField(StringField())         # 标记信息
+    isDominant = BooleanField(default=False)    # 是否是主力合约
 
-    isDominant = BooleanField(default=False)   # 是否是主力合约
+    TotalVolume = FloatField()                  # 总成交量
+    volume_std = FloatField()                   # 成交量std
 
-    TotalVolume = FloatField()              # 总成交量
-    volume_std = FloatField()              # 成交量std
-
-    # LastPrice = FloatField()                # 最新价
-    # LastVolume = FloatField(default=0.0)    # 现量
+    # LastPrice = FloatField()                  # 最新价
+    # LastVolume = FloatField(default=0.0)      # 现量
 
     # OHLC结果
-    open = FloatField()                # 开盘价
-    high = FloatField()             # 最高价
-    low = FloatField()              # 最低价
-    close = FloatField()              # 收盘价
+    open = FloatField()                 # 开盘价
+    high = FloatField()                 # 最高价
+    low = FloatField()                  # 最低价
+    close = FloatField()                # 收盘价
 
     # ticks数据里统计到的值，和OHLC数据有出入。实际应用看情况使用。
     OpenPrice = FloatField()                # 开盘价
@@ -261,6 +259,9 @@ class StatisDayDoc(Document):
     OpenInterest = IntField()               # 持仓量
     Turnover = FloatField()                 # 成交总额
     AvePrice = FloatField()                 # 均价
+
+    tags = ListField(StringField())         # 标记信息
+    tick_num = IntField()                   # Ticks数量
 
     # @queryset_manager
     # def valid(doc_cls, queryset):
