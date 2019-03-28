@@ -171,6 +171,8 @@ def get_dyn_kline_doc(_collection_name):
                 'UpdateTime',
             ]
         }
+        TradingTime = DateTimeField()
+
         InstrumentID = StringField()            # 合约代码
         category = StringField()                # 合约品种
         subcat = StringField()                  # 交易品种
@@ -180,7 +182,6 @@ def get_dyn_kline_doc(_collection_name):
         LastVolume = FloatField(default=0.0)    # 现量
 
         # hhmmss = StringField()                  # 时间(6位,时分秒 hhmmss)
-        UpdateTime = DateTimeField()
 
         open = FloatField()                # 开盘价
         high = FloatField()             # 最高价
@@ -220,7 +221,7 @@ class StatisDayDoc(Document):
             'day',
             'InstrumentID',
             'category',
-            'subID',
+            # 'subID',
             'MarketID',
             'TotalVolume',
             'tags',
@@ -228,7 +229,7 @@ class StatisDayDoc(Document):
     }
     # id = SequenceField(db_alias='ticks', primary_key=True)
 
-    day = DateTimeField()                     # 时间
+    TradingTime = DateTimeField()                     # 时间，日
 
     InstrumentID = StringField()            # 合约代码
     category = StringField()                # 合约品种
