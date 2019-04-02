@@ -6,7 +6,8 @@ __all__ = (
         'get_dyn_ticks_doc', 'get_dyn_dominant_ticks_doc', 'get_dyn_kline_doc', 'STORED_CATEGORY_LIST', 'StatisDayDoc',
     )
 
-STORED_CATEGORY_LIST = ['AL', 'BU', 'CU', 'FU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'ZN', 'AG', 'AU', 'WR']
+# STORED_CATEGORY_LIST = ['AG', 'AL', 'AU', 'BU', 'CU', 'FU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'ZN', 'WR']
+STORED_CATEGORY_LIST = ['AG', 'AL', 'AU', 'BU', 'CU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'ZN']
 
 # logger = logging.getLogger()
 

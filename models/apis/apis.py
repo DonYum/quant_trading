@@ -1,10 +1,10 @@
 import os
 import time
 import logging
-# from ..dbs.image_anno import ImageAnnoDoc
 from .gen_out_tabs import update_all_related_src_cat_tab
+from ..dbs.trading import *
 
-__all__ = ('Dbg_Timer', 'get_md5_from_url', 'gen_img_url', 'process_imgs', 'parallel_process_grps', )
+__all__ = ('Dbg_Timer', 'process_imgs', 'parallel_process_grps', )
 
 logger = logging.getLogger(__name__)
 
@@ -27,28 +27,8 @@ class Dbg_Timer():
             logger.warning(f'[{self.tag}]: Exec Time={"%.1fs" % self.interval}')
 
 
-def get_md5_from_url(url):
-    md5 = None
-    try:
-        md5 = os.path.splitext(os.path.basename(url))[0]
-    except Exception:
-        logger.error(f'Get md5 from url[{url}] Fail!', exc_info=True)
-        return None
-    return md5
-
-
-# 获取图片的URL
-def gen_img_url(image, with_url_base=True):
-    # TODO：修改服务器
-    CEPH_URL_BASE = 'http://10.60.242.105:5566/static/ceph/'
-    if with_url_base:
-        return CEPH_URL_BASE + image.md5 + '.' + image.ftype
-    else:
-        return '/static/ceph/' + image.md5 + '.' + image.ftype
-
-
 # 批量处理图片的并发方案
-def process_imgs(q_filter, process_img_func, pool_size=0, init_func=None, init_task_func=None, batch_func=None, spawn=False, time_low_th=60):
+def process_imgs(cat_id, q_filter, process_img_func, pool_size=0, init_func=None, init_task_func=None, batch_func=None, spawn=False, time_low_th=60):
     if init_func:
         # logger.info(f'exec `init_func`.')
         init_func(q_filter)
@@ -61,7 +41,8 @@ def process_imgs(q_filter, process_img_func, pool_size=0, init_func=None, init_t
     if pool_size == 0:
         pool_size = mp.cpu_count() - 1
 
-    total = ImageAnnoDoc.objects(**q_filter).count()
+    doc = get_dyn_ticks_doc(cat_id)
+    total = doc.objects(**q_filter).count()
     if total == 0:
         logger.info(f'There is no imgs to process.')
         return
@@ -114,7 +95,7 @@ def _process_imgs_task(params):
 
 # 批量处理图片
 # 说明：page_size==0的情况下处理所有图片
-def process_imgs_task(q_filter, process_img_func, page=0, page_size=0, time_low_th=60, init_task_func=None, batch_func=None):
+def process_imgs_task(cat_id, q_filter, process_img_func, page=0, page_size=0, time_low_th=60, init_task_func=None, batch_func=None):
     batch = 1000
     time_low_th = time_low_th
     time_high_th = 200
@@ -126,7 +107,8 @@ def process_imgs_task(q_filter, process_img_func, page=0, page_size=0, time_low_
         # logger.info(f'exec `init_task_func`.')
         init_task_func(q_filter, page)
 
-    imgs = ImageAnnoDoc.objects(**q_filter).timeout(False)
+    doc = get_dyn_ticks_doc(cat_id)
+    imgs = doc.objects(**q_filter).timeout(False)
     if page_size:
         imgs = imgs.skip(page * page_size).limit(page_size)
     total = imgs.count(with_limit_and_skip=True)
