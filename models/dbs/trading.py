@@ -168,7 +168,7 @@ class KlineDoc(Document):
         'indexes': [
             'TradingTime',
             'InstrumentID',
-            'k_bins',
+            'level',
             'category',
             'MarketID',
             'TotalVolume',
@@ -178,7 +178,7 @@ class KlineDoc(Document):
     TradingTime = DateTimeField()
 
     InstrumentID = StringField()            # 合约代码
-    k_bins = StringField()                  # K线粒度
+    level = StringField()                  # K线粒度
     category = StringField()                # 合约品种
     # subID = StringField()                  # 交易品种
     MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
