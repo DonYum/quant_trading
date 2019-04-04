@@ -7,7 +7,7 @@ from tqdm import tqdm_notebook as tqdm
 from ..dbs.trading import *
 from .apis import *
 
-__all__ = ('load_ticks_by_id', 'gen_kline_from_pd', 'save_kline_by_id', 'calc_kline_by_id', 'load_kline_to_df', )
+__all__ = ('load_ticks_by_id', 'gen_kline_from_pd', 'save_kline_by_id', 'save_1day_kline_by_id', 'calc_kline_by_id', 'load_kline_to_df', 'load_1day_kline_to_df', )
 
 logger = logging.getLogger(__name__)
 
@@ -143,14 +143,47 @@ def save_kline_by_id(_id, kline_df, level):
             KlineDoc.objects.insert(day_ks, load_bulk=False)
 
 
+# bulk save 日K
+def save_1day_kline_by_id(_id, kline_df):
+    level = '1d'
+
+    # 删除之前的数据
+    cnt = StatisDayDoc.objects(InstrumentID=_id).delete()
+    if cnt:
+        logger.info(f'{level}-{_id}: delete {cnt} already exists items.')
+
+    if kline_df.empty:
+        logger.warn(f'[{level}-{_id}]: Get empty kline_df.')
+        return pd.DataFrame()
+
+    # save
+    cnt = 0
+    day_ks = []
+    with Dbg_Timer(f'save_kline-{level}-{_id}', 15):
+        for i in range(kline_df.shape[0]):
+            cnt += 1
+            day_ks.append(StatisDayDoc(**kline_df.iloc[i].to_dict()))
+            if cnt > 1000:
+                if day_ks:
+                    StatisDayDoc.objects.insert(day_ks, load_bulk=False)
+                cnt = 0
+                day_ks = []
+        if day_ks:
+            StatisDayDoc.objects.insert(day_ks, load_bulk=False)
+
+
 def calc_kline_by_id(_ids):
     for _id in _ids:
         df = load_ticks_by_id(_id)
-        for level in ['1H', '3min', '5min', '15min', '30min', '1d']:
+        for level in ['3min', '5min', '15min', '30min', '1H']:
             kline_df = gen_kline_from_pd(_id, df, level, MarketID=4)
             save_kline_by_id(_id, kline_df, level)
 
+        kline_df = gen_kline_from_pd(_id, df, '1d', MarketID=4)
+        save_1day_kline_by_id(_id, kline_df)
 
+
+# 从数据库中load指定的kline数据
 def load_kline_to_df(cat, level):
     day_k = KlineDoc.objects(category=cat, level=level)
     total = day_k.count()
@@ -175,7 +208,32 @@ def load_kline_to_df(cat, level):
     return df
 
 
-# Demo
+# 从数据库中load指定的日K数据
+def load_1day_kline_to_df(cat):
+    day_k = StatisDayDoc.objects(category=cat)
+    total = day_k.count()
+
+    dicts = []
+    with tqdm(total=total, desc=f'process:') as pbar:
+        for trad in day_k:
+            pbar.update(1)
+            t_dict = trad.to_mongo().to_dict()
+            del t_dict['_id']
+            del t_dict['tags']
+            dicts.append(t_dict)
+
+    with Dbg_Timer(f'from_dict', 5):
+        df = pd.DataFrame.from_dict(dicts)
+        del dicts
+
+        df = df.set_index('TradingTime')
+        df = df.sort_index()
+        df = df.reset_index()
+
+    return df
+
+
+# Demo: 并发计算Kline数据并入库
 if '__main__' == __name__:
     cat_ids = STORED_CATEGORY_LIST
     # cat_ids = ['AG', 'AL', 'AU', 'BU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'ZN']
