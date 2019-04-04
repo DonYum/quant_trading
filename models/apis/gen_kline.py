@@ -1,7 +1,13 @@
 import logging
-from ..dbs.trading import *
+import numpy as np
+import pandas as pd
+from pandas.tseries.offsets import *
+from tqdm import tqdm_notebook as tqdm
 
-__all__ = ('load_ticks_by_id', 'gen_kline_from_pd', 'save_kline_by_id', 'calc_kline_by_id', )
+from ..dbs.trading import *
+from .apis import *
+
+__all__ = ('load_ticks_by_id', 'gen_kline_from_pd', 'save_kline_by_id', 'calc_kline_by_id', 'load_kline_to_df', )
 
 logger = logging.getLogger(__name__)
 
@@ -13,7 +19,7 @@ def load_ticks_by_id(_id):
     total = trads.count()
     if total < 2:
         logger.warn(f'{_id} has less than 2 items, Ignore.')
-        return None
+        return pd.DataFrame()
 
     dicts = []
     with tqdm(total=total, desc=f'{_id}:') as pbar:
@@ -76,8 +82,9 @@ def load_ticks_by_id(_id):
 
 # 生成kline df
 def gen_kline_from_pd(_id, df, level, MarketID=4, dbg=False):
-    if not df or df.empty:
-        return None
+    if df.empty:
+        logger.warn(f'[{level}-{_id}]: Get empty df.')
+        return pd.DataFrame()
 
     # 生成日K
     kline_df = df.LastPrice.resample(level).ohlc()
@@ -116,8 +123,9 @@ def save_kline_by_id(_id, kline_df, level):
     if cnt:
         logger.info(f'{level}-{_id}: delete {cnt} already exists items.')
 
-    if not kline_df or kline_df.empty:
-        return None
+    if kline_df.empty:
+        logger.warn(f'[{level}-{_id}]: Get empty kline_df.')
+        return pd.DataFrame()
 
     # save
     cnt = 0
@@ -141,6 +149,30 @@ def calc_kline_by_id(_ids):
         for level in ['1H', '3min', '5min', '15min', '30min', '1d']:
             kline_df = gen_kline_from_pd(_id, df, level, MarketID=4)
             save_kline_by_id(_id, kline_df, level)
+
+
+def load_kline_to_df(cat, level):
+    day_k = KlineDoc.objects(category=cat, level=level)
+    total = day_k.count()
+
+    dicts = []
+    with tqdm(total=total, desc=f'process:') as pbar:
+        for trad in day_k:
+            pbar.update(1)
+            t_dict = trad.to_mongo().to_dict()
+            del t_dict['_id']
+            # del t_dict['tags']
+            dicts.append(t_dict)
+
+    with Dbg_Timer(f'from_dict', 5):
+        df = pd.DataFrame.from_dict(dicts)
+        del dicts
+
+        df = df.set_index('TradingTime')
+        df = df.sort_index()
+        df = df.reset_index()
+
+    return df
 
 
 # Demo
