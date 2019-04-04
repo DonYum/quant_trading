@@ -4,9 +4,80 @@ import logging
 from .gen_out_tabs import update_all_related_src_cat_tab
 from ..dbs.trading import *
 
-__all__ = ('Dbg_Timer', 'process_imgs', 'parallel_process_grps', )
+__all__ = ('chunks_from_array', 'chunks_from_array_by_size', 'sample_arr_by_fix_step', 'Dbg_Timer', 'process_imgs', 'parallel_process_grps', )
 
 logger = logging.getLogger(__name__)
+
+
+# 用于list分页的生成器
+# 考虑到对齐，每组的长度可能不一样。
+# 参数：
+#   - arr: list
+#   - pages: 分成num组
+#   - page_size: 每组cnt个元素
+# 返回：
+#   list
+def chunks_from_array(arr, pages):
+    if not pages:
+        pages = 1
+
+    _len = len(arr)
+    if not arr or not isinstance(arr, list):
+        return []
+
+    # 处理超出数组长度的情况
+    if pages > _len:
+        pages = _len
+
+    for i in range(pages):
+        yield arr[i::pages]
+
+
+def chunks_from_array_by_size(arr, page_size):
+    if not page_size:
+        raise ValueError(f'Invalid params.')
+
+    _len = len(arr)
+    if not arr or not isinstance(arr, list):
+        return []
+
+    # 处理超出数组长度的情况
+    if page_size > _len:
+        page_size = _len
+
+    pages = _len // page_size
+
+    for i in range(pages):
+        yield arr[i::pages]
+
+
+# 从Array中等间距抽样
+# 参数：
+#   - arr
+#   - size: 抽取个数
+#   - omit: 取非交集
+def sample_arr_by_fix_step(arr, size, omit=False):
+    _len = len(arr)
+    if omit:
+        size = _len - size
+
+    if size <= 0:
+        return []
+
+    step = (_len + 1) / size
+    # print(step)
+    if step > 1:
+        idx = 0
+        while idx < _len:
+            yield arr[int(idx)]
+            idx += step
+    else:
+        for i in arr:
+            yield i
+
+
+# for i in range(1, 35):
+#     print(list(get_sub_arr(a, i, )))
 
 
 # 用于debug单条语句是的执行时间
