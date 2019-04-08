@@ -110,6 +110,11 @@ def gen_kline_from_pd(_id, df, level, MarketID=4, dbg=False):
 
     kline_df['tick_num'] = df.Turnover.resample(level).count()
 
+    # 处理
+    dst_0_idx = kline_df[dst] == 0
+    for dst, src in [('HighestPrice', 'high'), ('LowestPrice', 'low'), ('OpenPrice', 'open')]:
+        kline_df.loc[dst_0_idx, dst] = kline_df.loc[dst_0_idx, src]
+
     kline_df.reset_index(inplace=True)
     kline_df.dropna(inplace=True)
 
@@ -155,6 +160,8 @@ def save_1day_kline_by_id(_id, kline_df):
     if kline_df.empty:
         logger.warn(f'[{level}-{_id}]: Get empty kline_df.')
         return pd.DataFrame()
+
+    kline_df = kline_df.drop('level', axis=1)
 
     # save
     cnt = 0
@@ -209,8 +216,12 @@ def load_kline_to_df(cat, level):
 
 
 # 从数据库中load指定的日K数据
-def load_1day_kline_to_df(cat):
-    day_k = StatisDayDoc.objects(category=cat)
+def load_1day_kline_to_df(cat, main=True):
+    q_f = dict(category=cat)
+    if main:
+        q_f['isDominant'] = True
+
+    day_k = StatisDayDoc.objects(**q_f)
     total = day_k.count()
 
     dicts = []
