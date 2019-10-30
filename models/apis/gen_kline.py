@@ -182,7 +182,7 @@ def save_1day_kline_by_id(_id, kline_df):
 def calc_kline_by_id(_ids):
     for _id in _ids:
         df = load_ticks_by_id(_id)
-        for level in ['3min', '5min', '15min', '30min', '1H']:
+        for level in ['1min', '3min', '5min', '15min', '30min', '1H']:
             kline_df = gen_kline_from_pd(_id, df, level, MarketID=4)
             save_kline_by_id(_id, kline_df, level)
 
@@ -194,6 +194,8 @@ def calc_kline_by_id(_ids):
 def load_kline_to_df(cat, level):
     day_k = KlineDoc.objects(category=cat, level=level)
     total = day_k.count()
+    if not total:
+        raise
 
     dicts = []
     with tqdm(total=total, desc=f'process:') as pbar:
@@ -223,6 +225,8 @@ def load_1day_kline_to_df(cat, main=True):
 
     day_k = StatisDayDoc.objects(**q_f)
     total = day_k.count()
+    if not total:
+        raise
 
     dicts = []
     with tqdm(total=total, desc=f'process:') as pbar:

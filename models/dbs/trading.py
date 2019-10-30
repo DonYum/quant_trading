@@ -5,6 +5,7 @@ from mongoengine import *
 __all__ = (
         'STORED_CATEGORY_LIST', 'KLINE_BINS_LIST',
         'get_dyn_ticks_doc', 'get_dyn_dominant_ticks_doc', 'KlineDoc', 'StatisDayDoc',
+        'TickFilesDoc',
     )
 
 # STORED_CATEGORY_LIST = ['AG', 'AL', 'AU', 'BU', 'CU', 'FU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'ZN', 'WR']
@@ -54,8 +55,10 @@ def get_dyn_ticks_doc(_collection_name):
         LastPrice = FloatField()                # 最新价
         LastVolume = FloatField()    # 现量
 
-        hhmmss = StringField()                  # 时间(6位,时分秒 hhmmss)
         UpdateTime = DateTimeField()
+        hhmmss = StringField()                  # 时间(6位，时分秒 hhmmss)
+        day = StringField()                  # 日期(8位，yyyymmdd)
+        time_type = StringField()                   # 日盘 / 夜盘。 fam(front of a.m.)/bam(back of a.m.)/pm(a.m.)/night
         tags = ListField(StringField())         # 标记信息
 
         AskPrice1 = FloatField()
@@ -104,6 +107,7 @@ def get_dyn_ticks_doc(_collection_name):
 
 
 # 主力合约(dominant contract) tick数据集。实现分表存储。
+# 没必要单独存储！！！在`KlineDoc`中加`isDominant`字段即可。
 def get_dyn_dominant_ticks_doc(_collection_name):
     if _collection_name not in STORED_CATEGORY_LIST:
         raise Exception(f'Can not get d_ticks table[{_collection_name}].')
@@ -128,6 +132,7 @@ def get_dyn_dominant_ticks_doc(_collection_name):
         InstrumentID = StringField()            # 合约代码
         # category = StringField()                # 合约品种
         subID = StringField()                   # 子代码(日期)
+        time_type = StringField()                   # 日盘 / 夜盘
         MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
 
         LastPrice = FloatField()                # 最新价
@@ -180,7 +185,7 @@ class KlineDoc(Document):
     InstrumentID = StringField()            # 合约代码
     level = StringField()                  # K线粒度
     category = StringField()                # 合约品种
-    # subID = StringField()                  # 交易品种
+    time_type = StringField()                   # 日盘 / 夜盘
     MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
 
     isDominant = BooleanField(default=False)    # 是否是主力合约
@@ -241,7 +246,7 @@ class StatisDayDoc(Document):
 
     InstrumentID = StringField()            # 合约代码
     category = StringField()                # 合约品种
-    # subID = StringField()                 # 子代码(日期)
+    time_type = StringField()                   # 日盘 / 夜盘
     MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
 
     isDominant = BooleanField(default=False)    # 是否是主力合约
@@ -264,7 +269,7 @@ class StatisDayDoc(Document):
     LowestPrice = FloatField()              # 最低价
     # SettlePrice = FloatField()              # 收盘价
 
-    OpenInterest = IntField()               # 持仓量
+    OpenInterest = IntField()               # 持仓量 ***
     Turnover = FloatField()                 # 成交总额
     Turnover_new = FloatField()             # 计算出来的成交总额：k1d_df['Turnover_new'] = (df.LastPrice * df.LastVolume * 10).resample('1d').sum()
     AvePrice = FloatField()                 # 均价
@@ -275,3 +280,52 @@ class StatisDayDoc(Document):
     # @queryset_manager
     # def valid(doc_cls, queryset):
     #     return queryset.filter(status__ne='drop')
+
+
+class StatisInstrumentDoc(Document):
+    meta = {
+        'collection': 'statis_instrument',
+        'db_alias': 'statistic',
+        'index_background': True,
+        'auto_create_index': True,          # 每次操作都检查。TODO: Disabling this will improve performance.
+        'indexes': [
+            'InstrumentID',
+            'category',
+            # 'MarketID',
+        ]
+    }
+    InstrumentID = StringField(primary_key=True)            # 合约代码
+    category = StringField()                    # 合约品种
+    # plate = StringField()                     # 日盘 / 夜盘
+
+    tick_num = IntField()                       #
+    highest_price = FloatField()                #
+
+
+class TickFilesDoc(Document):
+    meta = {
+        'collection': 'tick_files',
+        'db_alias': 'ticks',
+        'index_background': True,
+        'auto_create_index': True,          # 每次操作都检查。TODO: Disabling this will improve performance.
+        'indexes': [
+            'InstrumentID',
+            'category',
+            # 'MarketID',
+        ]
+    }
+    MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
+    category = StringField()                # 合约品种: AU/AG/CU...
+    InstrumentID = StringField()            # 合约代码
+    subID = StringField()                   # 子代码(日期)，从InstrumentID中提取。
+
+    data_type = StringField()                    # tick/3min_k/1day_k...
+    year = StringField()
+    month = StringField()
+    day = StringField()
+
+    path = StringField(unique=True)            # 存放相对路径
+    size = IntField()       # bytes
+    line_num = IntField()
+
+    stored = BooleanField(default=False)
