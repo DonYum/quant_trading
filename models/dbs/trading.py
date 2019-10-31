@@ -57,7 +57,7 @@ def get_dyn_ticks_doc(_collection_name):
 
         UpdateTime = DateTimeField()
         hhmmss = StringField()                  # 时间(6位，时分秒 hhmmss)
-        day = StringField()                  # 日期(8位，yyyymmdd)
+        day = StringField()                  # 日期(8位，yyyymmdd)，InstrumentID+day可以索引到TickFiles里面的信息。
         time_type = StringField()                   # 日盘 / 夜盘。 fam(front of a.m.)/bam(back of a.m.)/pm(a.m.)/night
         tags = ListField(StringField())         # 标记信息
 
@@ -311,7 +311,8 @@ class TickFilesDoc(Document):
         'indexes': [
             'InstrumentID',
             'category',
-            # 'MarketID',
+            'diff_sec',
+            'tags',
         ]
     }
     MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
@@ -319,13 +320,18 @@ class TickFilesDoc(Document):
     InstrumentID = StringField()            # 合约代码
     subID = StringField()                   # 子代码(日期)，从InstrumentID中提取。
 
-    data_type = StringField()                    # tick/3min_k/1day_k...
+    data_type = StringField()                    # tick/3min_k/1day_k... subID: 9999表示主力dominant，0000表示指数index
     year = StringField()
     month = StringField()
     day = StringField()
+
+    start = DateTimeField()
+    end = DateTimeField()
+    diff_sec = IntField()
 
     path = StringField(unique=True)            # 存放相对路径
     size = IntField()       # bytes
     line_num = IntField()
 
     stored = BooleanField(default=False)
+    tags = ListField(StringField())
