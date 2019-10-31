@@ -9,7 +9,7 @@ __all__ = (
     )
 
 # STORED_CATEGORY_LIST = ['AG', 'AL', 'AU', 'BU', 'CU', 'FU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'ZN', 'WR']
-STORED_CATEGORY_LIST = ['AG', 'AL', 'AU', 'BU', 'CU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'ZN']
+STORED_CATEGORY_LIST = ['AG', 'AL', 'AU', 'BU', 'CU', 'FU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'WR', 'ZN']
 
 KLINE_BINS_LIST = ['3min', '5min', '15min', '30min', '1H', '2H']
 
@@ -102,6 +102,18 @@ def get_dyn_ticks_doc(_collection_name):
         # @queryset_manager
         # def valid(doc_cls, queryset):
         #     return queryset.filter(status__ne='drop')
+
+        @classmethod
+        def get_cat(cls):
+            return _collection_name
+
+        @classmethod
+        def get_mkts(cls):
+            return cls.objects().distinct('MarketID')
+
+        @classmethod
+        def get_ids(cls, q_f={}):
+            return cls.objects(**q_f).distinct('InstrumentID')
 
     return TicksDoc
 
@@ -332,6 +344,7 @@ class TickFilesDoc(Document):
     path = StringField(unique=True)            # 存放相对路径
     size = IntField()       # bytes
     line_num = IntField()
+    doc_num = IntField()
 
     stored = BooleanField(default=False)
     tags = ListField(StringField())
