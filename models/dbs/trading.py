@@ -5,7 +5,7 @@ from mongoengine import *
 __all__ = (
         'STORED_CATEGORY_LIST', 'KLINE_BINS_LIST',
         'get_dyn_ticks_doc', 'get_dyn_dominant_ticks_doc', 'KlineDoc', 'StatisDayDoc',
-        'TickFilesDoc',
+        'TickFilesDoc', 'ModelException',
     )
 
 # STORED_CATEGORY_LIST = ['AG', 'AL', 'AU', 'BU', 'CU', 'FU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'ZN', 'WR']
@@ -25,6 +25,10 @@ KLINE_BINS_LIST = ['3min', '5min', '15min', '30min', '1H', '2H']
 # connect(host=URI_statistic,  alias='statistic')
 
 
+class ModelException(Exception):
+    pass
+
+
 # tick数据集。实现分表存储。
 def get_dyn_ticks_doc(_collection_name):
     if _collection_name not in STORED_CATEGORY_LIST:
@@ -42,6 +46,8 @@ def get_dyn_ticks_doc(_collection_name):
                 'LastPrice',
                 'LastVolume',
                 'UpdateTime',
+                'day',
+                'time_type',
                 'tags',
             ]
         }
@@ -108,12 +114,17 @@ def get_dyn_ticks_doc(_collection_name):
             return _collection_name
 
         @classmethod
-        def get_mkts(cls):
-            return cls.objects().distinct('MarketID')
+        def get_mkt(cls):
+            mkts = cls.objects().distinct('MarketID')
+            if len(mkts) != 1:
+                raise ModelException(f'[{_collection_name}]: MarketID({mkts}) is invalid!')
+            return mkts[0]
 
         @classmethod
         def get_ids(cls, q_f={}):
             return cls.objects(**q_f).distinct('InstrumentID')
+
+    TicksDoc.get_mkt()
 
     return TicksDoc
 
@@ -325,12 +336,15 @@ class TickFilesDoc(Document):
             'category',
             'diff_sec',
             'tags',
+            'zip_line_num',
         ]
     }
     MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
     category = StringField()                # 合约品种: AU/AG/CU...
     InstrumentID = StringField()            # 合约代码
     subID = StringField()                   # 子代码(日期)，从InstrumentID中提取。
+
+    tags = ListField(StringField())
 
     data_type = StringField()                    # tick/3min_k/1day_k... subID: 9999表示主力dominant，0000表示指数index
     year = StringField()
@@ -344,7 +358,18 @@ class TickFilesDoc(Document):
     path = StringField(unique=True)            # 存放相对路径
     size = IntField()       # bytes
     line_num = IntField()
-    doc_num = IntField()
+
+    zip_path = StringField()            # 存放清理后的数据
+    zip_line_num = IntField()
+    zip_ver = IntField()
 
     stored = BooleanField(default=False)
-    tags = ListField(StringField())
+    doc_num = IntField()
+
+    @queryset_manager
+    def is_stored(doc_cls, queryset):
+        return queryset.filter(stored=True)
+
+    @queryset_manager
+    def not_stored(doc_cls, queryset):
+        return queryset.filter(stored=False)
