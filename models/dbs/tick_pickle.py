@@ -36,7 +36,7 @@ class PickleDbTick():
         else:
             # mkt / cat / 合约 / day / f'{合约}_{day}_{zip_ver}.pkl'
             # 4/AG/AG1401/20140108/AG1401_20140108_1.pkl
-            self._rel_path = Path(f'{tick_doc.MarketID}/{tick_doc.category}/{tick_doc.InstrumentID}/{tick_doc.day}/')
+            self._rel_path = Path(f'{tick_doc.MarketID}/{tick_doc.category}/{tick_doc.InstrumentID}/{tick_doc.month}/')
             self.abs_path = self.dst_root / self._rel_path
             self.f_name = f'{tick_doc.InstrumentID}_{tick_doc.day}_{self.zip_ver}.pkl'
             self.rel_file = self._rel_path / self.f_name   # to save in db
