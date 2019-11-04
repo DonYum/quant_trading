@@ -71,7 +71,7 @@ def get_dyn_ticks_doc(_collection_name):
         AskVolume1 = IntField()
         BidPrice1 = FloatField()
         BidVolume1 = IntField()
-        # AskPrice2 = FloatField()
+        # AskPrice2 = FloatField()              # 只有上期所股指期货IF才会有五档数据，其他的只有一档数据
         # AskVolume2 = IntField()
         # BidPrice2 = FloatField()
         # BidVolume2 = IntField()
