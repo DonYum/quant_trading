@@ -59,7 +59,7 @@ class PickleDbTick():
                 else:
                     _path.unlink()
                 _path = _path.parent
-        except:
+        except Exception:
             pass
         TickFilesDoc.objects(pk=self.tick_doc.pk).update(set__zip_line_num=0, set__zip_path=None)
 
@@ -73,7 +73,9 @@ class PickleDbTick():
         return _df
 
     # 保存tick到zip文件
-    def save_ticks(self):
+    def csv_to_pickle(self):
+        if self.tick_doc.subID in ['0000', '9999']:
+            return
         if self.tick_doc.diff_sec < 0 or 'empty_df' in self.tick_doc.tags or 'load_df_fail' in self.tick_doc.tags:
             return
 
@@ -100,7 +102,7 @@ class PickleDbTick():
         try:
             diff = end - start
             diff_sec = diff.total_seconds()
-        except:
+        except Exception:
             logger.error(f'calc diff_sec error: {self.tick_doc.path}, {start}, {end}')
             TickFilesDoc.objects(pk=self.tick_doc.pk).update(add_to_set__tags='diff_sec_error', set__doc_num=0)
             return
@@ -112,18 +114,18 @@ class PickleDbTick():
         _mm = datetime.datetime(_start.year, _start.month, _start.day, 12, 0)
         _pm = datetime.datetime(_start.year, _start.month, _start.day, 18, 0)
         time_period = dict(
-            fam = (_start, _am),
-            bam = (_am, _mm),
-            pm = (_mm, _pm),
-            night = (_pm, _end),
+            fam=(_start, _am),
+            bam=(_am, _mm),
+            pm=(_mm, _pm),
+            night=(_pm, _end),
         )
 
         df['time_type'] = 'unknow'
         for _type, _time in time_period.items():
             _start, _end = _time
-            df.loc[(df.UpdateTime>=_start) & (df.UpdateTime<_end), ['time_type']] = _type
+            df.loc[(df.UpdateTime >= _start) & (df.UpdateTime < _end), ['time_type']] = _type
 
-        unknow_num = df[df.time_type=='unknow'].shape[0]
+        unknow_num = df[df.time_type == 'unknow'].shape[0]
         if unknow_num:
             logger.error(f'calc time_type error: {self.tick_doc.path}, unknow_num={unknow_num}')
             TickFilesDoc.objects(pk=self.tick_doc.pk).update(add_to_set__tags='time_error', set__doc_num=0)
@@ -139,23 +141,35 @@ class PickleDbTick():
     # 从源数据中加载数据
     def load_df(self):
         tmpPath = self.src_root / self.tick_doc.path
-        pd_data = pd.read_csv(tmpPath,
-                names=['InstrumentID','MarketID','LastPrice','LastVolume','hhmmss','Reserved','UpdateTime','AskPrice1',
-                            'AskVolume1','BidPrice1','BidVolume1','AskPrice2','AskVolume2','BidPrice2','BidVolume2',
-                            'AskPrice3','AskVolume3','BidPrice3','BidVolume3','AskPrice4','AskVolume4','BidPrice4','BidVolume4',
-                            'AskPrice5','AskVolume5','BidPrice5','BidVolume5','OpenInterest','Turnover','AvePrice','invol','outvol',
-                            'Attr1','Volume1','Attr2','Volume2','HighestPrice','LowestPrice','SettlePrice','OpenPrice', 'ddd','fill'],
-                            low_memory=False, parse_dates=['UpdateTime'], dtype={'hhmmss': str}, error_bad_lines=False, warn_bad_lines=False, keep_default_na=False, na_values="")  #
-        pd_data.drop(['Reserved','AskPrice2','AskVolume2','BidPrice2','BidVolume2',
-                            'AskPrice3','AskVolume3','BidPrice3','BidVolume3','AskPrice4','AskVolume4','BidPrice4','BidVolume4',
-                            'AskPrice5','AskVolume5','BidPrice5','BidVolume5','invol','outvol',
-                            'Attr1','Volume1','Attr2','Volume2', 'SettlePrice', 'ddd','fill'], axis=1, inplace=True)
+        pd_data = pd.read_csv(
+                    tmpPath,
+                    names=['InstrumentID', 'MarketID', 'LastPrice', 'LastVolume', 'hhmmss', 'Reserved', 'UpdateTime', 'AskPrice1',
+                           'AskVolume1', 'BidPrice1', 'BidVolume1', 'AskPrice2', 'AskVolume2', 'BidPrice2', 'BidVolume2',
+                           'AskPrice3', 'AskVolume3', 'BidPrice3', 'BidVolume3', 'AskPrice4', 'AskVolume4', 'BidPrice4', 'BidVolume4',
+                           'AskPrice5', 'AskVolume5', 'BidPrice5', 'BidVolume5', 'OpenInterest', 'Turnover', 'AvePrice', 'invol', 'outvol',
+                           'Attr1', 'Volume1', 'Attr2', 'Volume2', 'HighestPrice', 'LowestPrice', 'SettlePrice', 'OpenPrice', 'mainID', 'fill'],
+                    low_memory=False, parse_dates=['UpdateTime'], dtype={'hhmmss': str}, error_bad_lines=False, warn_bad_lines=False
+                )
+
+        drop_cols = [
+                        'AskPrice1', 'AskVolume1', 'BidPrice1', 'BidVolume1', 'AskPrice2', 'AskVolume2', 'BidPrice2', 'BidVolume2',
+                        'AskPrice3', 'AskVolume3', 'BidPrice3', 'BidVolume3', 'AskPrice4', 'AskVolume4', 'BidPrice4', 'BidVolume4',
+                        'AskPrice5', 'AskVolume5', 'BidPrice5', 'BidVolume5',
+                        'Reserved', 'invol', 'outvol', 'Attr1', 'Volume1', 'Attr2', 'Volume2', 'fill',
+                    ]
+        if self.tick_doc.subID == '0000':           # 指数
+            drop_cols += ['HighestPrice', 'LowestPrice', 'OpenPrice', 'SettlePrice', 'Turnover', 'AvePrice', 'mainID']
+        elif self.tick_doc.subID == '9999':         # 主力
+            drop_cols += ['SettlePrice']
+        else:                                       # ticks
+            drop_cols += ['SettlePrice', 'mainID']
+        pd_data.drop(drop_cols, axis=1, inplace=True)
 
         line_num = pd_data.shape[0]
 
-        pd_data = pd_data[(pd_data.UpdateTime<'2022-12-12') & (pd_data.UpdateTime>'2012-12-12')]
+        pd_data = pd_data[(pd_data.UpdateTime < '2022-12-12') & (pd_data.UpdateTime > '2012-12-12')]
         pd_data['UpdateTime'] = pd.to_datetime(pd_data.UpdateTime)
-        pd_data = pd_data[pd_data.LastVolume>=0]
+        pd_data = pd_data[pd_data.LastVolume >= 0]
 
         # pd_data['subID'] = pd_data.InstrumentID.str[-4:]
 
