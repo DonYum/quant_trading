@@ -74,8 +74,6 @@ class PickleDbTick():
 
     # 保存tick到zip文件
     def csv_to_pickle(self):
-        if self.tick_doc.subID in ['0000', '9999']:
-            return
         if self.tick_doc.diff_sec < 0 or 'empty_df' in self.tick_doc.tags or 'load_df_fail' in self.tick_doc.tags:
             return
 
@@ -86,7 +84,7 @@ class PickleDbTick():
         try:
             df, line_num = self.load_df()
             TickFilesDoc.objects(pk=self.tick_doc.pk).update(set__line_num=line_num)
-        except:
+        except Exception:
             logger.error(f'Load df fail: path={self.tick_doc.path}')
             TickFilesDoc.objects(pk=self.tick_doc.pk).update(add_to_set__tags='load_df_fail')
             return
