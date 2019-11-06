@@ -3,7 +3,7 @@ import json
 import logging
 from collections import OrderedDict
 
-# from ..dbs.image_anno import ImageAnnoDoc
+from ..dbs.trading import TickFilesDoc
 
 __all__ = ('get_doc_statics', )
 
@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 # input:
 #   - query_filter: dict. 查询过滤条件。
 #   - fields: dict. key是fields，value是重命名的值。
-#   - document: Document. 待统计的Document，默认是ImageAnnoDoc。
+#   - document: Document. 待统计的Document，默认是TickFilesDoc。
 #   - unwind: list. fields中是List的字段。
 #   - sum_field: 指定后会$sum该字段。
 #   - sample_size: int. 采样大小，加速运算。默认为0，表示不采样。
@@ -76,9 +76,7 @@ def get_doc_statics(query_filter, fields, document=None, unwind=None, sum_field=
 
 # Demo
 if '__main__' == __name__:
-    fields = {'source': 0, 'subsource': 0, 'category': 0, 'input_tag': 'tag', 'label.remarks': 'remark'}
-    unwind = ['input_tag', 'label.remarks']
-    # query_filter = {"label__tags__0__exists": True}
-    # query_filter = {'status': 'ok'}
-    query_filter = {}
-    logger.info(list(get_doc_statics(query_filter, fields, unwind=unwind, document=ImageAnnoDoc, preserveNull=True, sample_size=0, dbg=True)))
+    fields = {'InstrumentID': 0}
+    unwind = []
+    query_filter = dict(MarketID=4)
+    res = list(get_doc_statics(query_filter, fields, unwind=unwind, document=TickFilesDoc, preserveNull=True, sample_size=0, dbg=False))

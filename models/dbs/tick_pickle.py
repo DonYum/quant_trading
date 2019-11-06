@@ -74,6 +74,8 @@ class PickleDbTick():
 
     # 保存tick到zip文件
     def csv_to_pickle(self):
+        if self.tick_doc.MarketID == 3:         # 中金所不处理
+            return
         if self.tick_doc.diff_sec < 0 or 'empty_df' in self.tick_doc.tags or 'load_df_fail' in self.tick_doc.tags:
             return
 
