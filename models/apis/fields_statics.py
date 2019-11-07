@@ -71,6 +71,7 @@ def get_doc_statics(query_filter, fields, document=None, unwind=None, sum_field=
     # 执行聚合运算。
     # 先过滤和aggregate里使用$match过滤效果一样、性能相差不大。
     res = document.objects(**query_filter).aggregate(*agg)
+    res = filter(lambda x: x[list(fields.keys())[0]], res)
     return res
 
 
@@ -79,4 +80,4 @@ if '__main__' == __name__:
     fields = {'InstrumentID': 0}
     unwind = []
     query_filter = dict(MarketID=4)
-    res = list(get_doc_statics(query_filter, fields, unwind=unwind, document=TickFilesDoc, preserveNull=True, sample_size=0, dbg=False))
+    res = list(get_doc_statics(query_filter, fields, unwind=unwind, sum_field=None, document=TickFilesDoc, preserveNull=True, sample_size=0, dbg=False))
