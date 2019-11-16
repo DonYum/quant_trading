@@ -370,14 +370,19 @@ class TickFilesDoc(Document):
     stored = BooleanField(default=False)
     doc_num = IntField()
 
-    @queryset_manager
-    def is_stored(doc_cls, queryset):
-        return queryset.filter(stored=True)
+    # 一些统计量
+    open = FloatField()
+    close = FloatField()
+    high = FloatField()
+    low = FloatField()
+    mean = FloatField()
+
+    OpenInterest = IntField()
+    Turnover = FloatField()                 # 成交总额
+    Turnover_calc = FloatField()             # 计算出来的成交总额：k1d_df['Turnover_new'] = (df.LastPrice * df.LastVolume * 10).resample('1d').sum()
+
+    volume_sum = IntField()                  # 总成交量
 
     @queryset_manager
-    def not_stored(doc_cls, queryset):
-        return queryset.filter(stored=False)
-
-    @queryset_manager
-    def not_stored(doc_cls, queryset):
-        return queryset.filter(stored=False)
+    def df_valid(doc_cls, queryset):
+        return queryset.filter(zip_path__ne=None, tags__ne='too_small')
