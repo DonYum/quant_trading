@@ -354,7 +354,7 @@ class TickFilesDoc(Document):
     month = StringField()
     day = StringField()
     isDominant = BooleanField(default=False)    # 是否是主力合约
-    is2ndDominant = BooleanField(default=False)    # 是否是主力合约
+    is2ndDominant = BooleanField(default=False)    # 是否是次主力合约
 
     start = DateTimeField()
     end = DateTimeField()
@@ -387,3 +387,11 @@ class TickFilesDoc(Document):
     @queryset_manager
     def df_valid(doc_cls, queryset):
         return queryset.filter(zip_path__ne=None, tags__ne='too_small')
+
+    @queryset_manager
+    def main(doc_cls, queryset):            # 主力
+        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['need_check', 'too_small'], isDominant=True)
+
+    @queryset_manager
+    def sub_main(doc_cls, queryset):        # 次主力
+        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['need_check', 'too_small'], is2ndDominant=True)
