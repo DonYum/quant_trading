@@ -177,9 +177,16 @@ class PickleDbTick():
 
 
 class PickleDbTicks():
-    def __init__(self, q_f):
-        self.ticks = TickFilesDoc.objects(**q_f)
+    def __init__(self, q_f, main_cls='main'):
+        self.main_cls = main_cls
+        if main_cls == 'main':
+            self.ticks = TickFilesDoc.main(**q_f)
+        elif main_cls == 'sub_main':
+            self.ticks = TickFilesDoc.sub_main(**q_f)
+        else:
+            self.ticks = TickFilesDoc.objects(**q_f)
         self.total = self.ticks.count()
+
         logger.info(f'total={self.total}')
 
     # 加载`q_f`筛选到的数据
