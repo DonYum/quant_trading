@@ -4,6 +4,7 @@ import time
 import pandas as pd
 from pathlib import Path
 import tushare as ts
+from mongoengine import *
 from tqdm import tqdm_notebook as tqdm
 
 __all__ = (
