@@ -338,6 +338,7 @@ class TickFilesDoc(Document):
             'tags',
             'day',
             'isDominant',
+            'is2ndDominant',
             'zip_line_num',
         ]
     }
@@ -353,6 +354,7 @@ class TickFilesDoc(Document):
     month = StringField()
     day = StringField()
     isDominant = BooleanField(default=False)    # 是否是主力合约
+    is2ndDominant = BooleanField(default=False)    # 是否是主力合约
 
     start = DateTimeField()
     end = DateTimeField()
