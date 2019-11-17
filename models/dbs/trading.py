@@ -338,7 +338,6 @@ class TickFilesDoc(Document):
             'tags',
             'day',
             'isDominant',
-            'isDominant',
             'zip_line_num',
         ]
     }
