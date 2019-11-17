@@ -1,7 +1,9 @@
 import datetime
 import logging
+import time
 import pandas as pd
 from pathlib import Path
+import tushare as ts
 from tqdm import tqdm_notebook as tqdm
 
 __all__ = (
@@ -74,14 +76,24 @@ class Stock1dOps():
         return df
 
     def dl_save_data(self):
+        # TODO: 增量更新。
         item = StockBasicDoc.objects(ts_code=self.ts_code, tags__nin=['ing', self.tag]).first()
         if not item:
             return False
 
         item.update(add_to_set__tags='ing')
 
-        df = ts.pro_bar(ts_code=item.ts_code, **self.pro_bar_param)
-        if df.empty:
+        ts.set_token('946b0621d8936497550c3a43ef7debb24099456d3711ef5df619067f')
+        pro = ts.pro_api()
+        try:
+            df = ts.pro_bar(ts_code=item.ts_code, **self.pro_bar_param)
+        except:
+            logger.warn(f'{item.ts_code} occured Exception. Try next.')
+            item.update(pull__tags='ing')
+            time.sleep(2)
+            return False
+
+        if df is None or df.empty:
             logger.warn(f'{item.ts_code} is empty')
             item.update(pull__tags='ing')
             return False
