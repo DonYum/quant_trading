@@ -47,6 +47,13 @@ PS：~~排除~~，`优势`
 
 **PS：**详见`pandas_save_test.ipynb`
 
+2019.12.11：
+在人脸特征测试上feather跟raw pkl写性能相差无几，读性能feather好。
+SSD盘
+
+2019.12.12：
+还有joblib、cPickle，比pd.pickle差。
+
 ## 数据描述
 
 ### 原始数据
