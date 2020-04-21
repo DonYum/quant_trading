@@ -350,25 +350,29 @@ class TickFilesDoc(Document):
     tags = ListField(StringField())
 
     data_type = StringField()                    # tick/9999/0000/1day_k... subID: 9999表示主力dominant，0000表示指数index
-    year = StringField()
-    month = StringField()
-    day = StringField()
-    isDominant = BooleanField(default=False)    # 是否是主力合约
-    is2ndDominant = BooleanField(default=False)    # 是否是次主力合约
+    year = StringField()                    # '2019'
+    month = StringField()                   # '201909'
+    day = StringField()                     # '20190925'
 
+    isDominant = BooleanField(default=False)    # 是否是主力合约
+    is2ndDominant = BooleanField(default=False)    # 是否是次主力合约：如何定义？
+
+    # tick数据的时间信息
     start = DateTimeField()
     end = DateTimeField()
     diff_sec = IntField()
 
+    # 原始文件
     path = StringField(unique=True)            # 存放相对路径
     size = IntField()       # bytes
     line_num = IntField()
 
+    # pkl压缩文件
     zip_path = StringField()            # 存放清理后的数据
     zip_line_num = IntField()
     zip_ver = IntField()
 
-    stored = BooleanField(default=False)
+    stored = BooleanField(default=False)        # 是否
     doc_num = IntField()
 
     # 一些统计量
