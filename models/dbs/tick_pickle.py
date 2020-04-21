@@ -185,7 +185,8 @@ class PickleDbTick():
         # 处理交易量字段
         pd_data = pd_data[pd_data.LastVolume >= 0]
 
-        logger.info(f'[{self.tick_doc.path}]: after washing: {line_num}->{pd_data.shape[0]}.')
+        if line_num > 7000:
+            logger.info(f'[{self.tick_doc.path}]: after washing: {line_num}->{pd_data.shape[0]}.')
 
         # pd_data['subID'] = pd_data.InstrumentID.str[-4:]
 

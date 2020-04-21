@@ -63,7 +63,7 @@ def get_dyn_ticks_doc(_collection_name):
 
         UpdateTime = DateTimeField()
         hhmmss = StringField()                  # 时间(6位，时分秒 hhmmss)
-        day = StringField()                  # 日期(8位，yyyymmdd)，InstrumentID+day可以索引到TickFiles里面的信息。
+        day = StringField()                     # 日期(8位，yyyymmdd)，InstrumentID+day可以索引到TickFiles里面的信息。
         time_type = StringField()                   # 日盘 / 夜盘。 fam(front of a.m.)/bam(back of a.m.)/pm(a.m.)/night
         tags = ListField(StringField())         # 标记信息
 
@@ -91,12 +91,12 @@ def get_dyn_ticks_doc(_collection_name):
         OpenInterest = IntField()               # 持仓量
         Turnover = FloatField()                 # 成交总额
         AvePrice = FloatField()                 # 均价
-        # invol = IntField()                      # 内盘
-        # outvol = IntField()                     # 外盘
-        # Attr1 = IntField()                      # 性质1(多开1,多换2,空平3,空开4,空换5,多平6)
+        # invol = IntField()                    # 内盘
+        # outvol = IntField()                   # 外盘
+        # Attr1 = IntField()                    # 性质1(多开1,多换2,空平3,空开4,空换5,多平6)
         # Volume1 = IntField()
         # Attr2 = IntField()
-        # Volume2 = IntField()                    # 数量2(多开1,多换2,空平3,空开4,空换5,多平6)
+        # Volume2 = IntField()                  # 数量2(多开1,多换2,空平3,空开4,空换5,多平6)
 
         HighestPrice = FloatField()             # 最高价
         LowestPrice = FloatField()              # 最低价
@@ -153,9 +153,9 @@ def get_dyn_dominant_ticks_doc(_collection_name):
         # id = SequenceField(db_alias='ticks', primary_key=True)
 
         InstrumentID = StringField()            # 合约代码
-        # category = StringField()                # 合约品种
+        # category = StringField()              # 合约品种
         subID = StringField()                   # 子代码(日期)
-        time_type = StringField()                   # 日盘 / 夜盘
+        time_type = StringField()               # 日盘 / 夜盘
         MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
 
         LastPrice = FloatField()                # 最新价
@@ -176,7 +176,7 @@ def get_dyn_dominant_ticks_doc(_collection_name):
 
         HighestPrice = FloatField()             # 最高价
         LowestPrice = FloatField()              # 最低价
-        # SettlePrice = FloatField()              # 结算价
+        # SettlePrice = FloatField()            # 结算价
         OpenPrice = FloatField()                # 开盘价
 
         # @queryset_manager
@@ -206,41 +206,41 @@ class KlineDoc(Document):
     TradingTime = DateTimeField()
 
     InstrumentID = StringField()            # 合约代码
-    level = StringField()                  # K线粒度
+    level = StringField()                   # K线粒度
     category = StringField()                # 合约品种
-    time_type = StringField()                   # 日盘 / 夜盘
+    time_type = StringField()               # 日盘 / 夜盘
     MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
 
     isDominant = BooleanField(default=False)    # 是否是主力合约
 
     TotalVolume = FloatField()              # 总成交量
-    volume_std = FloatField()              # 成交量std
+    volume_std = FloatField()               # 成交量std
 
-    # hhmmss = StringField()                  # 时间(6位,时分秒 hhmmss)
+    # hhmmss = StringField()                # 时间(6位,时分秒 hhmmss)
 
     open = FloatField()                 # 开盘价
     high = FloatField()                 # 最高价
     low = FloatField()                  # 最低价
     close = FloatField()                # 收盘价
 
-    OpenPrice = FloatField()                # 开盘价
-    HighestPrice = FloatField()             # 最高价
-    LowestPrice = FloatField()              # 最低价
-    # SettlePrice = FloatField()              # 收盘价
+    OpenPrice = FloatField()            # 开盘价
+    HighestPrice = FloatField()         # 最高价
+    LowestPrice = FloatField()          # 最低价
+    # SettlePrice = FloatField()        # 收盘价
 
-    # Volume1 = IntField()                  # 成交量
-    OpenInterest = IntField()               # 持仓量
-    Turnover = FloatField()                 # 成交总额
-    Turnover_new = FloatField()             # 计算出来的成交总额：k1d_df['Turnover_new'] = (df.LastPrice * df.LastVolume * 10).resample('1d').sum()
-    AvePrice = FloatField()                 # 均价
+    # Volume1 = IntField()              # 成交量
+    OpenInterest = IntField()           # 持仓量
+    Turnover = FloatField()             # 成交总额
+    Turnover_new = FloatField()         # 计算出来的成交总额：k1d_df['Turnover_new'] = (df.LastPrice * df.LastVolume * 10).resample('1d').sum()
+    AvePrice = FloatField()             # 均价
 
-    tick_num = IntField()                   # Ticks数量
+    tick_num = IntField()               # Ticks数量
 
-    # invol = IntField()                      # 内盘
-    # outvol = IntField()                     # 外盘
-    # Attr1 = IntField()                      # 性质1(多开1,多换2,空平3,空开4,空换5,多平6)
+    # invol = IntField()                # 内盘
+    # outvol = IntField()               # 外盘
+    # Attr1 = IntField()                # 性质1(多开1,多换2,空平3,空开4,空换5,多平6)
     # Attr2 = IntField()
-    # Volume2 = IntField()                    # 数量2(多开1,多换2,空平3,空开4,空换5,多平6)
+    # Volume2 = IntField()              # 数量2(多开1,多换2,空平3,空开4,空换5,多平6)
 
     # @queryset_manager
     # def valid(doc_cls, queryset):
@@ -265,11 +265,11 @@ class StatisDayDoc(Document):
     }
     # id = SequenceField(db_alias='ticks', primary_key=True)
 
-    TradingTime = DateTimeField()                     # 时间，日
+    TradingTime = DateTimeField()           # 时间，日
 
     InstrumentID = StringField()            # 合约代码
     category = StringField()                # 合约品种
-    time_type = StringField()                   # 日盘 / 夜盘
+    time_type = StringField()               # 日盘 / 夜盘
     MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
 
     isDominant = BooleanField(default=False)    # 是否是主力合约
@@ -290,7 +290,7 @@ class StatisDayDoc(Document):
     OpenPrice = FloatField()                # 开盘价
     HighestPrice = FloatField()             # 最高价
     LowestPrice = FloatField()              # 最低价
-    # SettlePrice = FloatField()              # 收盘价
+    # SettlePrice = FloatField()            # 收盘价
 
     OpenInterest = IntField()               # 持仓量 ***
     Turnover = FloatField()                 # 成交总额
@@ -317,7 +317,7 @@ class StatisInstrumentDoc(Document):
             # 'MarketID',
         ]
     }
-    InstrumentID = StringField(primary_key=True)            # 合约代码
+    InstrumentID = StringField(primary_key=True)    # 合约代码
     category = StringField()                    # 合约品种
     # plate = StringField()                     # 日盘 / 夜盘
 
@@ -349,13 +349,13 @@ class TickFilesDoc(Document):
 
     tags = ListField(StringField())
 
-    data_type = StringField()                    # tick/9999/0000/1day_k... subID: 9999表示主力dominant，0000表示指数index
+    data_type = StringField()               # tick/9999/0000/1day_k... subID: 9999表示主力dominant，0000表示指数index
     year = StringField()                    # '2019'
     month = StringField()                   # '201909'
     day = StringField()                     # '20190925'
 
-    isDominant = BooleanField(default=False)    # 是否是主力合约
-    is2ndDominant = BooleanField(default=False)    # 是否是次主力合约：如何定义？
+    isDominant = BooleanField(default=False)        # 是否是主力合约
+    is2ndDominant = BooleanField(default=False)     # 是否是次主力合约：如何定义？
 
     # tick数据的时间信息
     start = DateTimeField()
@@ -363,16 +363,16 @@ class TickFilesDoc(Document):
     diff_sec = IntField()
 
     # 原始文件
-    path = StringField(unique=True)            # 存放相对路径
-    size = IntField()       # bytes
+    path = StringField(unique=True)         # 存放相对路径
+    size = IntField()                       # bytes
     line_num = IntField()
 
     # pkl压缩文件
-    zip_path = StringField()            # 存放清理后的数据
+    zip_path = StringField()                # 存放清理后的数据
     zip_line_num = IntField()
     zip_ver = IntField()
 
-    stored = BooleanField(default=False)        # 是否
+    stored = BooleanField(default=False)    # 是否
     doc_num = IntField()
 
     # 一些统计量
@@ -384,9 +384,9 @@ class TickFilesDoc(Document):
 
     OpenInterest = IntField()
     Turnover = FloatField()                 # 成交总额
-    Turnover_calc = FloatField()             # 计算出来的成交总额：k1d_df['Turnover_new'] = (df.LastPrice * df.LastVolume * 10).resample('1d').sum()
+    Turnover_calc = FloatField()            # 计算出来的成交总额：k1d_df['Turnover_new'] = (df.LastPrice * df.LastVolume * 10).resample('1d').sum()
 
-    volume_sum = IntField()                  # 总成交量
+    volume_sum = IntField()                 # 总成交量
 
     @queryset_manager
     def df_valid(doc_cls, queryset):
