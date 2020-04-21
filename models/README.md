@@ -93,8 +93,7 @@ import mongoengine
 from models.dbs import *
 
 # _sock = '127.0.0.1:6007'
-_sock = '192.168.9.13:6007'
-_auth = 'eric:11112222'
+_auth = 'xxx:xxx'
 # URI_statistic = f'mongodb://{_sock}/statistic'
 
 for _doc in ['ticks', 'd_ticks', 'kline', 'statistic']:

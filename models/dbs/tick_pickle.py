@@ -16,6 +16,15 @@ class PickleDbException(Exception):
     pass
 
 
+# tick存储的操作方法，主要功能是：清洗、入库、读取等
+# 提供的方法有：
+#   - zip_exists()
+#   - del_zip()
+#   - load_ticks(): 从pkl文件加载数据
+#   - csv_to_pickle(): 根据文件路径保存到pkl文件
+#   - _load_df(): 加载、清洗csv原始数据
+# 入库的方法：
+#   - 先生成TickFilesDoc，然后使用`PickleDbTick(tick_doc).csv_to_pickle()`保存。
 class PickleDbTick():
     def __init__(self, tick_doc, dst_root='/ticks', src_root='/data/tick', zip_ver=1):
         self.tick_doc = tick_doc
@@ -72,7 +81,7 @@ class PickleDbTick():
         _df = pd.read_pickle(self.file, compression=self.compression)
         return _df
 
-    # 保存tick到zip文件
+    # 保存tick到pkl文件
     def csv_to_pickle(self):
         if self.tick_doc.MarketID == 3:         # 中金所不处理
             return
@@ -84,7 +93,7 @@ class PickleDbTick():
             return
 
         try:
-            df, line_num = self.load_df()
+            df, line_num = self._load_df()
             TickFilesDoc.objects(pk=self.tick_doc.pk).update(set__line_num=line_num)
         except Exception:
             logger.error(f'Load df fail: path={self.tick_doc.path}')
@@ -139,7 +148,7 @@ class PickleDbTick():
         TickFilesDoc.objects(pk=self.tick_doc.pk).update(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file), zip_ver=self.zip_ver)
 
     # 从源数据中加载数据
-    def load_df(self):
+    def _load_df(self):
         tmpPath = self.src_root / self.tick_doc.path
         pd_data = pd.read_csv(
                     tmpPath,
@@ -157,6 +166,8 @@ class PickleDbTick():
                         'AskPrice5', 'AskVolume5', 'BidPrice5', 'BidVolume5',
                         'Reserved', 'invol', 'outvol', 'Attr1', 'Volume1', 'Attr2', 'Volume2', 'fill',
                     ]
+
+        # 删掉不需要的列
         if self.tick_doc.subID == '0000':           # 指数
             drop_cols += ['HighestPrice', 'LowestPrice', 'OpenPrice', 'SettlePrice', 'Turnover', 'AvePrice', 'mainID']
         elif self.tick_doc.subID == '9999':         # 主力
@@ -167,15 +178,20 @@ class PickleDbTick():
 
         line_num = pd_data.shape[0]
 
+        # 处理时间字段
         pd_data = pd_data[(pd_data.UpdateTime < '2022-12-12') & (pd_data.UpdateTime > '2012-12-12')]
         pd_data['UpdateTime'] = pd.to_datetime(pd_data.UpdateTime)
+        # 处理交易量字段
         pd_data = pd_data[pd_data.LastVolume >= 0]
+
+        logger.info(f'')
 
         # pd_data['subID'] = pd_data.InstrumentID.str[-4:]
 
         return pd_data, line_num
 
 
+# 批量加载tick数据
 class PickleDbTicks():
     def __init__(self, q_f, main_cls='main'):
         self.main_cls = main_cls
