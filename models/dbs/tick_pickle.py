@@ -22,7 +22,7 @@ class PickleDbException(Exception):
 #   - del_zip()
 #   - load_ticks(): 从pkl文件加载数据
 #   - csv_to_pickle(): 根据文件路径保存到pkl文件
-#   - _load_df(): 加载、清洗csv原始数据
+#   - _load_df_from_csv(): 加载、清洗csv原始数据
 # 入库的方法：
 #   - 先生成TickFilesDoc，然后使用`PickleDbTick(tick_doc).csv_to_pickle()`保存。
 class PickleDbTick():
@@ -94,7 +94,7 @@ class PickleDbTick():
             return
 
         try:
-            df, line_num = self._load_df()
+            df, line_num = self._load_df_from_csv()
             TickFilesDoc.objects(pk=self.tick_doc.pk).update(set__line_num=line_num)
         except Exception:
             logger.error(f'Load df fail: path={self.tick_doc.path}')
@@ -149,7 +149,7 @@ class PickleDbTick():
         TickFilesDoc.objects(pk=self.tick_doc.pk).update(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file), zip_ver=self.zip_ver)
 
     # 从源数据中加载数据
-    def _load_df(self):
+    def _load_df_from_csv(self):
         tmpPath = self.src_root / self.tick_doc.path
         pd_data = pd.read_csv(
                     tmpPath,
@@ -208,7 +208,7 @@ class PickleDbTicks():
         logger.info(f'total={self.total}')
 
     # 加载`q_f`筛选到的数据
-    def get_ticks(self):
+    def load_ticks(self):
         df_l = []
         with tqdm(total=self.total, desc=f'Progress:') as pbar:
             for tick in self.ticks:
@@ -221,4 +221,17 @@ class PickleDbTicks():
 
         # df.sort_values('UpdateTime', inplace=True)
         df = pd.concat(df_l, sort=False)
+        return df
+
+    # 从`TickFilesDoc`加载日K
+    def load_days(self):
+        buf = []
+        for tick in ticks:
+            item = tick.to_mongo().to_dict()
+            for _key in ['_id', 'tags', 'zip_ver', 'zip_path', 'stored', 'year', 'month', 'data_type']:    # , 'subID', 'category', 'MarketID', 'isDominant'
+                del item[_key]
+            buf.append(item)
+
+        df = pd.DataFrame.from_dict(buf)
+
         return df
