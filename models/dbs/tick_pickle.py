@@ -226,7 +226,7 @@ class PickleDbTicks():
     # 从`TickFilesDoc`加载日K
     def load_days(self):
         buf = []
-        for tick in ticks:
+        for tick in self.ticks:
             item = tick.to_mongo().to_dict()
             for _key in ['_id', 'tags', 'zip_ver', 'zip_path', 'stored', 'year', 'month', 'data_type']:    # , 'subID', 'category', 'MarketID', 'isDominant'
                 del item[_key]
