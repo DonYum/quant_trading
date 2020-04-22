@@ -354,8 +354,8 @@ class TickFilesDoc(Document):
     month = StringField()                   # '201909'
     day = StringField()                     # '20190925'
 
-    isDominant = BooleanField(default=False)        # 是否是主力合约
-    is2ndDominant = BooleanField(default=False)     # 是否是次主力合约：如何定义？
+    isDominant = BooleanField(default=False)        # 是否是主力合约：交易量（OpenInterest）最大
+    is2ndDominant = BooleanField(default=False)     # 是否是次主力合约：交易量大于当天最大交易量一半的合约
 
     # tick数据的时间信息
     start = DateTimeField()
@@ -372,7 +372,7 @@ class TickFilesDoc(Document):
     zip_line_num = IntField()
     zip_ver = IntField()
 
-    stored = BooleanField(default=False)    # 是否
+    stored = BooleanField(default=False)    # 暂时没有使用
     doc_num = IntField()
 
     # 一些统计量
@@ -389,7 +389,11 @@ class TickFilesDoc(Document):
     volume_sum = IntField()                 # 总成交量
 
     @queryset_manager
-    def df_valid(doc_cls, queryset):
+    def wait_import(doc_cls, queryset):     # 增量添加了文件，但没有生成pkl文件
+        return queryset.filter(line_num=None)
+
+    @queryset_manager
+    def df_valid(doc_cls, queryset):        # 正常pkl化的数据
         return queryset.filter(zip_path__ne=None, tags__ne='too_small')
 
     @queryset_manager
