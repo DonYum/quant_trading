@@ -398,8 +398,8 @@ class TickFilesDoc(Document):
 
     @queryset_manager
     def main(doc_cls, queryset):            # 主力
-        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['need_check', 'too_small'], isDominant=True)
+        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['invalid_day', 'too_small'], isDominant=True)
 
     @queryset_manager
     def sub_main(doc_cls, queryset):        # 次主力
-        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['need_check', 'too_small'], is2ndDominant=True)
+        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['invalid_day', 'too_small'], is2ndDominant=True)
