@@ -228,7 +228,7 @@ class PickleDbTicks():
         buf = []
         for tick in self.ticks:
             item = tick.to_mongo().to_dict()
-            for _key in ['_id', 'tags', 'zip_ver', 'zip_path', 'stored', 'year', 'month', 'data_type']:    # , 'subID', 'category', 'MarketID', 'isDominant'
+            for _key in ['_id', 'tags', 'zip_ver', 'zip_path', 'stored', 'data_type']:    # , 'subID', 'category', 'MarketID', 'isDominant'
                 del item[_key]
             buf.append(item)
 

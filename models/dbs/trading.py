@@ -64,7 +64,7 @@ def get_dyn_ticks_doc(_collection_name):
         UpdateTime = DateTimeField()
         hhmmss = StringField()                  # 时间(6位，时分秒 hhmmss)
         day = StringField()                     # 日期(8位，yyyymmdd)，InstrumentID+day可以索引到TickFiles里面的信息。
-        time_type = StringField()                   # 日盘 / 夜盘。 fam(front of a.m.)/bam(back of a.m.)/pm(a.m.)/night
+        time_type = StringField()                   # 日盘 / 夜盘。 fam(front of a.m.) / bam(back of a.m.) / pm(a.m.) / night
         tags = ListField(StringField())         # 标记信息
 
         AskPrice1 = FloatField()
