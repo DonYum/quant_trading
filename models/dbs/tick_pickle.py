@@ -162,10 +162,14 @@ class PickleDbTick():
                 )
 
         drop_cols = [
-                        'AskPrice1', 'AskVolume1', 'BidPrice1', 'BidVolume1', 'AskPrice2', 'AskVolume2', 'BidPrice2', 'BidVolume2',
-                        'AskPrice3', 'AskVolume3', 'BidPrice3', 'BidVolume3', 'AskPrice4', 'AskVolume4', 'BidPrice4', 'BidVolume4',
+                        # 'AskPrice1', 'AskVolume1', 'BidPrice1', 'BidVolume1',
+                        'AskPrice2', 'AskVolume2', 'BidPrice2', 'BidVolume2',
+                        'AskPrice3', 'AskVolume3', 'BidPrice3', 'BidVolume3',
+                        'AskPrice4', 'AskVolume4', 'BidPrice4', 'BidVolume4',
                         'AskPrice5', 'AskVolume5', 'BidPrice5', 'BidVolume5',
-                        'Reserved', 'invol', 'outvol', 'Attr1', 'Volume1', 'Attr2', 'Volume2', 'fill',
+                        'Reserved', 'invol', 'outvol',
+                        'Attr1', 'Volume1', 'Attr2', 'Volume2',
+                        'fill',
                     ]
 
         # 删掉不需要的列
