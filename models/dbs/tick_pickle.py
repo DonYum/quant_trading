@@ -120,20 +120,24 @@ class PickleDbTick():
 
         _start = start + datetime.timedelta(seconds=-1)
         _end = end + datetime.timedelta(seconds=2)
-        _am = datetime.datetime(_start.year, _start.month, _start.day, 10, 20)
-        _mm = datetime.datetime(_start.year, _start.month, _start.day, 12, 0)
-        _pm = datetime.datetime(_start.year, _start.month, _start.day, 18, 0)
+        _night_s = datetime.datetime(_start.year, _start.month, _start.day, 20, 0)
+        _night_e = datetime.datetime(_start.year, _start.month, _start.day+1, 4, 0)
+
+        _fam_s = datetime.datetime(_end.year, _end.month, _end.day, 8, 0)
+        _fam_e = datetime.datetime(_end.year, _end.month, _end.day, 10, 20)
+        _mm = datetime.datetime(_end.year, _end.month, _end.day, 12, 0)
+        _pm = datetime.datetime(_end.year, _end.month, _end.day, 18, 0)
         time_period = dict(
-            fam=(_start, _am),
-            bam=(_am, _mm),
+            night=(_night_s, _night_e),
+            fam=(_fam_s, _fam_e),
+            bam=(_fam_s, _mm),
             pm=(_mm, _pm),
-            night=(_pm, _end),
         )
 
         df['time_type'] = 'unknow'
         for _type, _time in time_period.items():
-            _start, _end = _time
-            df.loc[(df.UpdateTime >= _start) & (df.UpdateTime < _end), ['time_type']] = _type
+            __start, __end = _time
+            df.loc[(df.UpdateTime >= __start) & (df.UpdateTime < __end), ['time_type']] = _type
 
         unknow_num = df[df.time_type == 'unknow'].shape[0]
         if unknow_num:
@@ -142,11 +146,16 @@ class PickleDbTick():
             return
 
         # save pickle
-        self.abs_path.mkdir(parents=True, exist_ok=True)
-        df.to_pickle(self.file, compression=self.compression)
+        self._to_pkl(df)
+        # self.abs_path.mkdir(parents=True, exist_ok=True)
+        # df.to_pickle(self.file, compression=self.compression)
 
         # update tick_doc
         TickFilesDoc.objects(pk=self.tick_doc.pk).update(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file), zip_ver=self.zip_ver)
+
+    def _to_pkl(self, df):
+        self.abs_path.mkdir(parents=True, exist_ok=True)
+        df.to_pickle(self.file, compression=self.compression)
 
     # 从源数据中加载数据
     def _load_df_from_csv(self):
