@@ -55,8 +55,8 @@ class PickleDbTick():
     def zip_exists(self):
         zip_exists = self.file.exists()
         if bool(self.tick_doc.zip_path) and not zip_exists:
-            raise PickleDbException(f'Pls check: zip_exists={zip_exists}, tick_doc.zip_path={self.tick_doc.zip_path}')
-        return bool(self.tick_doc.zip_path)
+            logger.warning(f'Pls check: zip_exists={zip_exists}, tick_doc.zip_path={self.tick_doc.zip_path}')
+        return zip_exists
 
     # 删除zip文件
     def del_zip(self):
@@ -70,7 +70,8 @@ class PickleDbTick():
                 _path = _path.parent
         except Exception:
             pass
-        TickFilesDoc.objects(pk=self.tick_doc.pk).update(set__zip_line_num=0, set__zip_path=None)
+        self.tick_doc.update(set__zip_line_num=0, set__zip_path=None)
+        self.tick_doc.reload()
 
     # 加载ticks
     def load_ticks(self):
@@ -95,15 +96,18 @@ class PickleDbTick():
 
         try:
             df, line_num = self._load_df_from_csv()
-            TickFilesDoc.objects(pk=self.tick_doc.pk).update(set__line_num=line_num)
+            self.tick_doc.update(set__line_num=line_num)
+            self.tick_doc.reload()
         except Exception:
             logger.error(f'Load df fail: path={self.tick_doc.path}')
-            TickFilesDoc.objects(pk=self.tick_doc.pk).update(add_to_set__tags='load_df_fail')
+            self.tick_doc.update(add_to_set__tags='load_df_fail')
+            self.tick_doc.reload()
             return
 
         if df.empty:
             # logger.error(f'df.empty error: {self.tick_doc.path}')
-            TickFilesDoc.objects(pk=self.tick_doc.pk).update(add_to_set__tags='empty_df', set__doc_num=0)
+            self.tick_doc.update(add_to_set__tags='empty_df', set__doc_num=0)
+            self.tick_doc.reload()
             return
 
         # 处理时间信息
@@ -114,36 +118,60 @@ class PickleDbTick():
             diff_sec = diff.total_seconds()
         except Exception:
             logger.error(f'calc diff_sec error: {self.tick_doc.path}, {start}, {end}')
-            TickFilesDoc.objects(pk=self.tick_doc.pk).update(add_to_set__tags='diff_sec_error', set__doc_num=0)
+            self.tick_doc.update(add_to_set__tags='diff_sec_error', set__doc_num=0)
+            self.tick_doc.reload()
             return
-        TickFilesDoc.objects(pk=self.tick_doc.pk).update(set__start=start, set__end=end, set__diff_sec=diff_sec)
+        self.tick_doc.update(set__start=start, set__end=end, set__diff_sec=diff_sec)
+        self.tick_doc.reload()
 
-        _start = start + datetime.timedelta(seconds=-1)
-        _end = end + datetime.timedelta(seconds=2)
-        _night_s = datetime.datetime(_start.year, _start.month, _start.day, 20, 0)
-        _night_e = datetime.datetime(_start.year, _start.month, _start.day+1, 4, 0)
+        # _start = start + datetime.timedelta(seconds=-1)
+        # _end = end + datetime.timedelta(seconds=2)
+        # _night_s = datetime.datetime(_start.year, _start.month, _start.day, 20, 0)
+        # _night_e = datetime.datetime(_start.year, _start.month, _start.day+1, 4, 0)
 
-        _fam_s = datetime.datetime(_end.year, _end.month, _end.day, 8, 0)
-        _fam_e = datetime.datetime(_end.year, _end.month, _end.day, 10, 20)
-        _mm = datetime.datetime(_end.year, _end.month, _end.day, 12, 0)
-        _pm = datetime.datetime(_end.year, _end.month, _end.day, 18, 0)
+        # _fam_s = datetime.datetime(_end.year, _end.month, _end.day, 8, 0)
+        # _fam_e = datetime.datetime(_end.year, _end.month, _end.day, 10, 20)
+        # _mm = datetime.datetime(_end.year, _end.month, _end.day, 12, 0)
+        # _pm = datetime.datetime(_end.year, _end.month, _end.day, 18, 0)
+        # time_period = dict(
+        #     night=(_night_s, _night_e),
+        #     fam=(_fam_s, _fam_e),
+        #     bam=(_fam_s, _mm),
+        #     pm=(_mm, _pm),
+        # )
+
+        # 将日夜盘交易时间拉会到同一天处理：
+        #    09:00:00 -> 05:40:00
+        #    10:15:00 -> 06:55:00
+        #    10:30:00 -> 07:10:00
+        #    11:00:00 -> 07:40:00
+        #    13:30:00 -> 10:10:00
+        #    15:00:00 -> 11:40:00
+        #    21:00:00 -> 17:40:00
+        #    02:30:00 -> 23:10:00
+        df['UpdateTime_delay'] = df['UpdateTime'] + datetime.timedelta(hours=-3, minutes=-20)
+        df['_UpdateTime_hour'] = df['UpdateTime_delay'].map(lambda x: (x.hour))
         time_period = dict(
-            night=(_night_s, _night_e),
-            fam=(_fam_s, _fam_e),
-            bam=(_fam_s, _mm),
-            pm=(_mm, _pm),
+            fam=(4, 6),
+            bam=(6, 8),
+            pm=(8, 14),
+            night=(14, 24),
         )
 
         df['time_type'] = 'unknow'
         for _type, _time in time_period.items():
-            __start, __end = _time
-            df.loc[(df.UpdateTime >= __start) & (df.UpdateTime < __end), ['time_type']] = _type
+            _start, _end = _time
+            print(_type, _start, _end)
+            df.loc[(df._UpdateTime_hour >= _start) & (df._UpdateTime_hour < _end), ['time_type']] = _type
 
         unknow_num = df[df.time_type == 'unknow'].shape[0]
         if unknow_num:
             logger.error(f'calc time_type error: {self.tick_doc.path}, unknow_num={unknow_num}')
-            TickFilesDoc.objects(pk=self.tick_doc.pk).update(add_to_set__tags='time_error', set__doc_num=0)
+            self.tick_doc.update(add_to_set__tags='time_error', set__doc_num=0)
+            self.tick_doc.reload()
             return
+
+        df = df.drop(['UpdateTime_delay', '_UpdateTime_hour'], axis=1)
 
         # save pickle
         self._to_pkl(df)
@@ -151,7 +179,8 @@ class PickleDbTick():
         # df.to_pickle(self.file, compression=self.compression)
 
         # update tick_doc
-        TickFilesDoc.objects(pk=self.tick_doc.pk).update(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file), zip_ver=self.zip_ver)
+        self.tick_doc.update(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file), zip_ver=self.zip_ver)
+        self.tick_doc.reload()
 
     def _to_pkl(self, df):
         self.abs_path.mkdir(parents=True, exist_ok=True)
