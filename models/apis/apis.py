@@ -216,14 +216,18 @@ def process_imgs_task(cat_id, q_filter, process_img_func, page=0, page_size=0, t
 
 
 # 并发处理
-def parallel_process_grps(grp_ids, process_func, pool_size=0, init_func=None, spawn=False):
+def parallel_process_grps(grp_ids, process_func, pool_size=0, init_func=None, spawn=False, use_thread=False):
     if init_func:
         # logger.info(f'exec `init_func`.')
         init_func(grp_ids)
 
     import multiprocessing as mp
-    if spawn:
-        mp.set_start_method('spawn')              # 解决因为并发引起死锁的问题
+    if use_thread:
+        from multiprocessing.dummy import Pool
+    else:
+        from multiprocessing import Pool
+        if spawn:
+            mp.set_start_method('spawn')              # 解决因为并发引起死锁的问题
 
     # 动态调整pool_size大小
     if pool_size == 0:
@@ -241,7 +245,7 @@ def parallel_process_grps(grp_ids, process_func, pool_size=0, init_func=None, sp
 
     # 启动多进程
     st = time.time()
-    thread_pool = mp.Pool(pool_size)
+    thread_pool = Pool(pool_size)
     thread_pool.map(process_func, grp_ids)
     # for x in thread_pool.imap(_process_imgs_task, params):
     #     logger.info(f'[{x}]: Finished!. Time={"%.1fs" % (time.time() - st)}.')
