@@ -473,7 +473,13 @@ class TickFilesDoc(Document):
         if df is None or df.empty:
             logger.warn(f'ERROR: df not exists: {self!r}')
             return None
-        
+
+        # 日夜盘切分
+        #   fam: 09:00 - 10:15, 1:15, 75' ,  ticks=9000
+        #   bam: 10:30 - 11:30, 1:00, 60' ,  ticks=7200
+        #    pm: 13:30 - 15:00, 1:30, 90' ,  ticks=10800
+        # night: 21:00 - 02:30, 5:00, 300',  ticks=36000
+
         # 将日夜盘交易时间拉会到同一天处理：
         #    09:00:00 -> 05:40:00
         #    10:15:00 -> 06:55:00
@@ -495,7 +501,6 @@ class TickFilesDoc(Document):
         df['time_type'] = 'unknow'
         for _type, _time in time_period.items():
             _start, _end = _time
-            # print(_type, _start, _end)
             df.loc[(df._UpdateTime_hour >= _start) & (df._UpdateTime_hour <= _end), ['time_type']] = _type
 
         unknow_num = df[df.time_type == 'unknow'].shape[0]
@@ -512,12 +517,14 @@ class TickFilesDoc(Document):
         days = df['UpdateTime_day'].unique()
         time_types = df['time_type'].unique()
 
+        # 删除已经存在的数据
         __ticks = TickSplitPklFilesDoc.objects(file_doc=self)
-        for __tick in __ticks:
-            __tick.del_zip()
-        TickSplitPklFilesDoc.objects(file_doc=self).delete()
-        # self.update(pull__tags='splited', set__doc_num=0)
-        self.reload()
+        if __ticks.count():
+            for __tick in __ticks:
+                __tick.del_zip()
+            TickSplitPklFilesDoc.objects(file_doc=self).delete()
+            # self.update(pull__tags='splited', set__doc_num=0)
+            self.reload()
 
         # logger.info(f'DELETE({cnt}): {self!r}')
 
@@ -530,6 +537,9 @@ class TickFilesDoc(Document):
                 _file = self.abs_path / __f_name
 
                 _df = df[(df.UpdateTime_day==day) & (df.time_type==time_type)]
+                if _df.empty:
+                    continue
+
                 start = _df['UpdateTime'].min()
                 end = _df['UpdateTime'].max()
                 try:
@@ -587,7 +597,7 @@ class TickFilesDoc(Document):
             return
         # pkl = PickleDbTick(self.tick_doc)
 
-        update_d = {}
+        update_d = dict(set__doc_num=0)
 
         if not force:
             if 'empty_df' in self.tags or 'load_df_fail' in self.tags:        # self.tick_doc.diff_sec < 0
@@ -631,47 +641,13 @@ class TickFilesDoc(Document):
         # self.update(set__start=start, set__end=end, set__diff_sec=diff_sec)
         # self.reload()
 
-        # 将日夜盘交易时间拉会到同一天处理：
-        #    09:00:00 -> 05:40:00
-        #    10:15:00 -> 06:55:00
-        #    10:30:00 -> 07:10:00
-        #    11:30:00 -> 08:10:00
-        #    13:30:00 -> 10:10:00
-        #    15:00:00 -> 11:40:00
-        #    21:00:00 -> 17:40:00
-        #    02:30:00 -> 23:10:00
-        df['UpdateTime_delay'] = df['UpdateTime'] + datetime.timedelta(hours=-3, minutes=-20)
-        df['_UpdateTime_hour'] = df['UpdateTime_delay'].map(lambda x: (x.hour))
-        time_period = dict(
-            fam=(4, 6),     # 05:40:00 <= _ <= 06:55:00,    4 <= _ <= 6
-            bam=(7, 8),     # 07:10:00 <= _ <= 08:10:00,    7 <= _ <= 8
-            pm=(9, 14),     # 10:10:00 <= _ <= 11:40:00,    9 <= _ <= 14
-            night=(15, 24), # 17:40:00 <= _ <= 23:10:00,   15 <= _ <= 24
-        )
-
-        df['time_type'] = 'unknow'
-        for _type, _time in time_period.items():
-            _start, _end = _time
-            # print(_type, _start, _end)
-            df.loc[(df._UpdateTime_hour >= _start) & (df._UpdateTime_hour <= _end), ['time_type']] = _type
-
-        unknow_num = df[df.time_type == 'unknow'].shape[0]
-        if unknow_num:
-            logger.error(f'calc time_type error: {self!r}, unknow_num={unknow_num}')
-            update_d = {**update_d, **dict(add_to_set__tags='time_error', set__doc_num=0)}
-            self.update(**update_d)
-            self.reload()
-            return
-
-        df = df.drop(['UpdateTime_delay', '_UpdateTime_hour'], axis=1)
-
         # save pickle
         self._to_pkl(df)
         # self.abs_path.mkdir(parents=True, exist_ok=True)
         # df.to_pickle(self.file, compression=self.compression)
 
         # update tick_doc
-        update_d = {**update_d, **dict(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file))}
+        update_d = {**update_d, **dict(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file), pull__tags='time_error')}
         self.update(**update_d)
         self.reload()
 
@@ -779,7 +755,10 @@ class TickSplitPklFilesDoc(Document):
     # pkl压缩文件
     zip_path = StringField()                # 存放清理后的数据
     zip_line_num = IntField()
-    zip_ver = IntField()
+    # zip_ver = IntField()
+
+    # 特征文件
+    features_path = StringField()           # 提取特征后的文件
 
     # stored = BooleanField(default=False)    # 暂时没有使用
     # doc_num = IntField()
@@ -797,21 +776,17 @@ class TickSplitPklFilesDoc(Document):
 
     volume_sum = IntField()                 # 总成交量
 
-    # @queryset_manager
-    # def wait_import(doc_cls, queryset):     # 增量添加了文件，但没有生成pkl文件
-    #     return queryset.filter(line_num=None)
-
     @queryset_manager
-    def df_valid(doc_cls, queryset):        # 正常pkl化的数据
-        return queryset.filter(zip_path__ne=None, tags__ne='too_small')
+    def valid(doc_cls, queryset):        # 正常pkl化的数据
+        return queryset.filter(tags__nin=['too_small'])
 
     @queryset_manager
     def main(doc_cls, queryset):            # 主力
-        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['invalid_day', 'too_small'], isDominant=True)
+        return queryset.filter(zip_path__ne=None, high__ne=None, tags__nin=['too_small'], isDominant=True)
 
     @queryset_manager
     def sub_main(doc_cls, queryset):        # 次主力
-        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['invalid_day', 'too_small'], is2ndDominant=True)
+        return queryset.filter(zip_path__ne=None, high__ne=None, tags__nin=['too_small'], is2ndDominant=True)
 
     def __repr__(self):
         return f'[{self.InstrumentID}][{self.day}][{self.time_type}]: zip_path={self.zip_path}, zip_line_num={self.zip_line_num}, tags={self.tags}, diff_sec={round(self.diff_sec/3600, 1)}h'
@@ -822,25 +797,18 @@ class TickSplitPklFilesDoc(Document):
     compression = 'zip'     # 测试下来读写性能综合考虑zip是最优的方法
     # _zip_ver = 1
 
-    # # rel_file = None   # 相对路径，to save in db
-    # # abs_path = None   # 绝对路径，用于创建目录
-    # # _f_name = None     # 文件名
-    # # file = None       # 文件绝对路径
-    # @property
-    # def _rel_path(self):
-    #     return Path(f'{self.MarketID}/{self.category}/{self.InstrumentID}/{self.month}/')
-    # @property
-    # def abs_path(self):
-    #     return self.dst_root / self._rel_path
-    @property
-    def rel_file(self):
-        return self.zip_path
     @property
     def file(self):
-        return self.dst_root / self.rel_file
+        return self.dst_root / self.zip_path
     @property
     def _f_name(self):
         return self.file.name
+    @property
+    def feature_file(self):
+        return self.file.parent / f'{self.file.stem}_feature.pkl'
+    @property
+    def _feature_rel_path(self):        # 相对路径，写入数据库会用到
+        return self.file.relative_to(self.dst_root)
 
     # 检查zip文件是否存在
     def zip_exists(self):
@@ -870,6 +838,12 @@ class TickSplitPklFilesDoc(Document):
         _df = pd.read_pickle(self.file, compression=self.compression)
         return _df
 
-    def _to_pkl(self, df):
+    # def _to_pkl(self, df):
+    #     # self.abs_path.mkdir(parents=True, exist_ok=True)
+    #     df.to_pickle(self.file, compression=self.compression)
+
+    def save_features(self, df):
         # self.abs_path.mkdir(parents=True, exist_ok=True)
-        df.to_pickle(self.file, compression=self.compression)
+        df.to_pickle(self.feature_file, compression=self.compression)
+        self.update(set__features_path=str(self._feature_rel_path))
+        self.reload()
