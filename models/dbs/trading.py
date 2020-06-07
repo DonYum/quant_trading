@@ -403,3 +403,6 @@ class TickFilesDoc(Document):
     @queryset_manager
     def sub_main(doc_cls, queryset):        # 次主力
         return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['invalid_day', 'too_small'], is2ndDominant=True)
+
+    def __repr__(self):
+        return f'[{self.InstrumentID}-{self.day}]: path={self.path}, path={self.path}, size={self.size}, line_num={self.line_num},  zip_line_num={self.zip_line_num}, tags={self.tags}, diff_sec={self.diff_sec/3600}h'

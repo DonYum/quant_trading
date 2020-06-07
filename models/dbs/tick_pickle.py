@@ -90,10 +90,10 @@ class PickleDbTick():
 
         if not force:
             if 'empty_df' in self.tick_doc.tags or 'load_df_fail' in self.tick_doc.tags:        # self.tick_doc.diff_sec < 0
-                logger.warn(f'Pls check tick_doc: tick_doc.tags={self.tick_doc.tags}')
+                logger.warn(f'Pls check tick_doc: {self.tick_doc}')
                 return
             if pkl.zip_exists():
-                logger.warn(f'Load df fail: path={self.tick_doc.path}')
+                logger.warn(f'pkl already exists: {self.tick_doc}')
                 return
 
         try:
@@ -101,13 +101,13 @@ class PickleDbTick():
             self.tick_doc.update(set__line_num=line_num)
             self.tick_doc.reload()
         except Exception:
-            logger.error(f'Load df fail: path={self.tick_doc.path}')
+            logger.error(f'Load df fail: {self.tick_doc}')
             self.tick_doc.update(add_to_set__tags='load_df_fail')
             self.tick_doc.reload()
             return
 
         if df.empty:
-            logger.error(f'df.empty error: {self.tick_doc.path}')
+            logger.error(f'df.empty error: {self.tick_doc}')
             self.tick_doc.update(add_to_set__tags='empty_df', set__doc_num=0)
             self.tick_doc.reload()
             return
@@ -119,7 +119,7 @@ class PickleDbTick():
             diff = end - start
             diff_sec = diff.total_seconds()
         except Exception:
-            logger.error(f'calc diff_sec error: {self.tick_doc.path}, {start}, {end}')
+            logger.error(f'calc diff_sec error: {self.tick_doc}, {start}, {end}')
             self.tick_doc.update(add_to_set__tags='diff_sec_error', set__doc_num=0)
             self.tick_doc.reload()
             return
@@ -152,7 +152,7 @@ class PickleDbTick():
 
         unknow_num = df[df.time_type == 'unknow'].shape[0]
         if unknow_num:
-            logger.error(f'calc time_type error: {self.tick_doc.path}, unknow_num={unknow_num}')
+            logger.error(f'calc time_type error: {self.tick_doc}, unknow_num={unknow_num}')
             self.tick_doc.update(add_to_set__tags='time_error', set__doc_num=0)
             self.tick_doc.reload()
             return
