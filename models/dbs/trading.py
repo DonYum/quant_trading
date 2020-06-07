@@ -1,12 +1,17 @@
 import datetime
 import logging
 from mongoengine import *
+import pandas as pd
+from pathlib import Path
+from tqdm import tqdm_notebook as tqdm
 
 __all__ = (
         'STORED_CATEGORY_LIST', 'KLINE_BINS_LIST',
         'get_dyn_ticks_doc', 'get_dyn_dominant_ticks_doc', 'KlineDoc', 'StatisDayDoc',
-        'TickFilesDoc', 'ModelException',
+        'TickFilesDoc', 'ModelException', 'TickSplitPklFilesDoc',
     )
+
+logger = logging.getLogger()
 
 # STORED_CATEGORY_LIST = ['AG', 'AL', 'AU', 'BU', 'CU', 'FU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'ZN', 'WR']
 STORED_CATEGORY_LIST = ['AG', 'AL', 'AU', 'BU', 'CU', 'FU', 'HC', 'NI', 'PB', 'RB', 'RU', 'SN', 'WR', 'ZN']
@@ -64,7 +69,7 @@ def get_dyn_ticks_doc(_collection_name):
         UpdateTime = DateTimeField()
         hhmmss = StringField()                  # 时间(6位，时分秒 hhmmss)
         day = StringField()                     # 日期(8位，yyyymmdd)，InstrumentID+day可以索引到TickFiles里面的信息。
-        time_type = StringField()                   # 日盘 / 夜盘。 fam(front of a.m.) / bam(back of a.m.) / pm(a.m.) / night
+        time_type = StringField()                   # 日盘 / 夜盘。 fam(front of a.m.) / bam(back of a.m.) / pm(p.m.) / night
         tags = ListField(StringField())         # 标记信息
 
         AskPrice1 = FloatField()
@@ -370,7 +375,7 @@ class TickFilesDoc(Document):
     # pkl压缩文件
     zip_path = StringField()                # 存放清理后的数据
     zip_line_num = IntField()
-    zip_ver = IntField()
+    zip_ver = IntField(default=1)
 
     stored = BooleanField(default=False)    # 暂时没有使用
     doc_num = IntField()
@@ -405,4 +410,466 @@ class TickFilesDoc(Document):
         return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['invalid_day', 'too_small'], is2ndDominant=True)
 
     def __repr__(self):
-        return f'[{self.InstrumentID}-{self.day}]: path={self.path}, path={self.path}, size={self.size}, line_num={self.line_num},  zip_line_num={self.zip_line_num}, tags={self.tags}, diff_sec={self.diff_sec/3600}h'
+        return f'[{self.InstrumentID}-{self.day}]: path={self.path}, size={self.size}, line_num={self.line_num}, zip_line_num={self.zip_line_num}, tags={self.tags}, diff_sec={round(self.diff_sec/3600, 1)}h'
+
+    ###############################################
+    dst_root = Path('/ticks')
+    src_root = Path('/data/tick')
+
+    compression = 'zip'     # 测试下来读写性能综合考虑zip是最优的方法
+    _zip_ver = 1
+
+    # rel_file = None   # 相对路径，to save in db
+    # abs_path = None   # 绝对路径，用于创建目录
+    # _f_name = None     # 文件名
+    # file = None       # 文件绝对路径
+    @property
+    def _rel_path(self):
+        return Path(f'{self.MarketID}/{self.category}/{self.InstrumentID}/{self.month}/')
+    @property
+    def abs_path(self):
+        return self.dst_root / self._rel_path
+    @property
+    def _f_name(self):
+        return f'{self.InstrumentID}_{self.day}_{self._zip_ver}.pkl'
+    @property
+    def rel_file(self):
+        return self._rel_path / self._f_name   # to save in db
+    @property
+    def file(self):
+        return self.abs_path / self._f_name
+
+    # 检查zip文件是否存在
+    def zip_exists(self):
+        zip_exists = self.file.exists()
+        return zip_exists
+
+    # 删除zip文件
+    def del_zip(self):
+        _path = self.file
+        try:
+            while _path.exists():
+                if _path.is_dir():
+                    _path.rmdir()
+                else:
+                    _path.unlink()
+                _path = _path.parent
+        except Exception:
+            pass
+        self.update(set__zip_line_num=0, set__zip_path=None)
+        self.reload()
+
+    # 加载ticks
+    def load_ticks(self):
+        if not self.zip_exists():
+            logger.warn(f'ERROR: Not Exists: {self!r}')
+            return None
+        _df = pd.read_pickle(self.file, compression=self.compression)
+        return _df
+
+    # 按照日夜盘存储
+    def save_splited(self):
+        df = self.load_ticks()
+        if df is None or df.empty:
+            logger.warn(f'ERROR: df not exists: {self!r}')
+            return None
+        
+        # 将日夜盘交易时间拉会到同一天处理：
+        #    09:00:00 -> 05:40:00
+        #    10:15:00 -> 06:55:00
+        #    10:30:00 -> 07:10:00
+        #    11:30:00 -> 08:10:00
+        #    13:30:00 -> 10:10:00
+        #    15:00:00 -> 11:40:00
+        #    21:00:00 -> 17:40:00
+        #    02:30:00 -> 23:10:00
+        df['UpdateTime_delay'] = df['UpdateTime'] + datetime.timedelta(hours=-3, minutes=-20)
+        df['_UpdateTime_hour'] = df['UpdateTime_delay'].map(lambda x: (x.hour))
+        time_period = dict(
+            fam=(4, 6),     # 05:40:00 <= _ <= 06:55:00,    4 <= _ <= 6
+            bam=(7, 8),     # 07:10:00 <= _ <= 08:10:00,    7 <= _ <= 8
+            pm=(9, 14),     # 10:10:00 <= _ <= 11:40:00,    9 <= _ <= 14
+            night=(15, 24), # 17:40:00 <= _ <= 23:10:00,   15 <= _ <= 24
+        )
+
+        df['time_type'] = 'unknow'
+        for _type, _time in time_period.items():
+            _start, _end = _time
+            # print(_type, _start, _end)
+            df.loc[(df._UpdateTime_hour >= _start) & (df._UpdateTime_hour <= _end), ['time_type']] = _type
+
+        unknow_num = df[df.time_type == 'unknow'].shape[0]
+        if unknow_num:
+            logger.error(f'calc time_type error: {self!r}, unknow_num={unknow_num}')
+            # update_d = {**update_d, **dict(add_to_set__tags='time_error', set__doc_num=0)}
+            # self.update(**update_d)
+            # self.reload()
+            return
+
+        df['UpdateTime_day'] = df['UpdateTime_delay'].map(lambda x: x.strftime('%Y%m%d'))
+        df = df.drop(['UpdateTime_delay', '_UpdateTime_hour'], axis=1)
+
+        days = df['UpdateTime_day'].unique()
+        time_types = df['time_type'].unique()
+
+        __ticks = TickSplitPklFilesDoc.objects(file_doc=self)
+        for __tick in __ticks:
+            __tick.del_zip()
+        TickSplitPklFilesDoc.objects(file_doc=self).delete()
+        # self.update(pull__tags='splited', set__doc_num=0)
+        self.reload()
+
+        # logger.info(f'DELETE({cnt}): {self!r}')
+
+        cnt = 0
+        for day in days:
+            for time_type in time_types:
+                # 相关路径的计算
+                __f_name = f'{self.InstrumentID}_{self.day}_{self._zip_ver}_{day}_{time_type}.pkl'
+                _rel_file = self._rel_path / __f_name   # to save in db
+                _file = self.abs_path / __f_name
+
+                _df = df[(df.UpdateTime_day==day) & (df.time_type==time_type)]
+                start = _df['UpdateTime'].min()
+                end = _df['UpdateTime'].max()
+                try:
+                    diff = end - start
+                    diff_sec = diff.total_seconds()
+                except Exception:
+                    logger.error(f'[{day}-{time_type}]: calc diff_sec error: {self!r}, {start}, {end}')
+                    continue
+
+                # 一些统计量
+                statics_d = dict(
+                    zip_line_num = _df.shape[0],
+                    open = _df.iloc[0]['LastPrice'],
+                    close = _df.iloc[-1]['LastPrice'],
+                    high = _df['LastPrice'].max(),
+                    low = _df['LastPrice'].min(),
+                    mean = _df['LastPrice'].mean(),
+
+                    OpenInterest = _df.iloc[-1]['OpenInterest'],
+                    Turnover = _df.iloc[-1]['Turnover'],                 # 成交总额
+                    volume_sum = _df['LastVolume'].sum(),
+                )
+
+                _df.to_pickle(_file, compression=self.compression)
+
+                TickSplitPklFilesDoc(
+                    file_doc = self,
+                    MarketID = self.MarketID,
+                    category = self.category,
+                    InstrumentID = self.InstrumentID,
+                    data_type = self.data_type,
+                    isDominant = self.isDominant,
+                    is2ndDominant = self.is2ndDominant,
+
+                    year = start.strftime('%Y'),
+                    month = start.strftime('%Y%m'),
+                    day = day,
+                    time_type = time_type,
+
+                    start = start,
+                    end = end,
+                    diff_sec = diff_sec,
+
+                    zip_path = str(_rel_file),
+                    **statics_d,
+                ).save()
+
+                cnt += 1
+        self.update(add_to_set__tags='splited', set__doc_num=cnt)
+        self.reload()
+
+    # 保存tick到pkl文件
+    def csv_to_pickle(self, force=False):
+        if self.MarketID == 3:         # 中金所不处理
+            return
+        # pkl = PickleDbTick(self.tick_doc)
+
+        update_d = {}
+
+        if not force:
+            if 'empty_df' in self.tags or 'load_df_fail' in self.tags:        # self.tick_doc.diff_sec < 0
+                logger.warn(f'Pls check: {self!r}')
+                return
+            if self.zip_exists():
+                logger.warn(f'pkl already exists: {self!r}')
+                return
+
+        try:
+            df, line_num = self._load_df_from_csv()
+            update_d['set__line_num'] = line_num
+            # self.update(set__line_num=line_num)
+            # self.reload()
+        except Exception:
+            logger.error(f'Load df fail: {self!r}')
+            self.update(add_to_set__tags='load_df_fail')
+            self.reload()
+            return
+
+        if df.empty:
+            logger.error(f'df.empty error: {self!r}')
+            self.update(add_to_set__tags='empty_df', set__doc_num=0)
+            self.reload()
+            return
+
+        # 处理时间信息
+        start = df['UpdateTime'].min()
+        end = df['UpdateTime'].max()
+        try:
+            diff = end - start
+            diff_sec = diff.total_seconds()
+        except Exception:
+            logger.error(f'calc diff_sec error: {self!r}, {start}, {end}')
+            update_d = {**update_d, **dict(add_to_set__tags='diff_sec_error', set__doc_num=0)}
+            self.update(**update_d)
+            self.reload()
+            return
+
+        update_d = {**update_d, **dict(set__start=start, set__end=end, set__diff_sec=diff_sec)}
+        # self.update(set__start=start, set__end=end, set__diff_sec=diff_sec)
+        # self.reload()
+
+        # 将日夜盘交易时间拉会到同一天处理：
+        #    09:00:00 -> 05:40:00
+        #    10:15:00 -> 06:55:00
+        #    10:30:00 -> 07:10:00
+        #    11:30:00 -> 08:10:00
+        #    13:30:00 -> 10:10:00
+        #    15:00:00 -> 11:40:00
+        #    21:00:00 -> 17:40:00
+        #    02:30:00 -> 23:10:00
+        df['UpdateTime_delay'] = df['UpdateTime'] + datetime.timedelta(hours=-3, minutes=-20)
+        df['_UpdateTime_hour'] = df['UpdateTime_delay'].map(lambda x: (x.hour))
+        time_period = dict(
+            fam=(4, 6),     # 05:40:00 <= _ <= 06:55:00,    4 <= _ <= 6
+            bam=(7, 8),     # 07:10:00 <= _ <= 08:10:00,    7 <= _ <= 8
+            pm=(9, 14),     # 10:10:00 <= _ <= 11:40:00,    9 <= _ <= 14
+            night=(15, 24), # 17:40:00 <= _ <= 23:10:00,   15 <= _ <= 24
+        )
+
+        df['time_type'] = 'unknow'
+        for _type, _time in time_period.items():
+            _start, _end = _time
+            # print(_type, _start, _end)
+            df.loc[(df._UpdateTime_hour >= _start) & (df._UpdateTime_hour <= _end), ['time_type']] = _type
+
+        unknow_num = df[df.time_type == 'unknow'].shape[0]
+        if unknow_num:
+            logger.error(f'calc time_type error: {self!r}, unknow_num={unknow_num}')
+            update_d = {**update_d, **dict(add_to_set__tags='time_error', set__doc_num=0)}
+            self.update(**update_d)
+            self.reload()
+            return
+
+        df = df.drop(['UpdateTime_delay', '_UpdateTime_hour'], axis=1)
+
+        # save pickle
+        self._to_pkl(df)
+        # self.abs_path.mkdir(parents=True, exist_ok=True)
+        # df.to_pickle(self.file, compression=self.compression)
+
+        # update tick_doc
+        update_d = {**update_d, **dict(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file))}
+        self.update(**update_d)
+        self.reload()
+
+    def _to_pkl(self, df):
+        self.abs_path.mkdir(parents=True, exist_ok=True)
+        df.to_pickle(self.file, compression=self.compression)
+
+    # 从源数据中加载数据
+    def _load_df_from_csv(self):
+        tmpPath = self.src_root / self.path
+        pd_data = pd.read_csv(
+                    tmpPath,
+                    names=['InstrumentID', 'MarketID', 'LastPrice', 'LastVolume', 'hhmmss', 'Reserved', 'UpdateTime', 'AskPrice1',
+                           'AskVolume1', 'BidPrice1', 'BidVolume1', 'AskPrice2', 'AskVolume2', 'BidPrice2', 'BidVolume2',
+                           'AskPrice3', 'AskVolume3', 'BidPrice3', 'BidVolume3', 'AskPrice4', 'AskVolume4', 'BidPrice4', 'BidVolume4',
+                           'AskPrice5', 'AskVolume5', 'BidPrice5', 'BidVolume5', 'OpenInterest', 'Turnover', 'AvePrice', 'invol', 'outvol',
+                           'Attr1', 'Volume1', 'Attr2', 'Volume2', 'HighestPrice', 'LowestPrice', 'SettlePrice', 'OpenPrice', 'mainID', 'fill'],
+                    low_memory=False, parse_dates=['UpdateTime'], dtype={'hhmmss': str}, error_bad_lines=False, warn_bad_lines=False
+                )
+
+        drop_cols = [
+                        # 'AskPrice1', 'AskVolume1', 'BidPrice1', 'BidVolume1',
+                        'AskPrice2', 'AskVolume2', 'BidPrice2', 'BidVolume2',
+                        'AskPrice3', 'AskVolume3', 'BidPrice3', 'BidVolume3',
+                        'AskPrice4', 'AskVolume4', 'BidPrice4', 'BidVolume4',
+                        'AskPrice5', 'AskVolume5', 'BidPrice5', 'BidVolume5',
+                        'Reserved', 'invol', 'outvol',
+                        'Attr1', 'Volume1', 'Attr2', 'Volume2',
+                        'fill',
+                    ]
+
+        # 删掉不需要的列
+        if self.subID == '0000':           # 指数
+            drop_cols += ['HighestPrice', 'LowestPrice', 'OpenPrice', 'SettlePrice', 'Turnover', 'AvePrice', 'mainID']
+        elif self.subID == '9999':         # 主力
+            drop_cols += ['SettlePrice']
+        else:                                       # ticks
+            drop_cols += ['SettlePrice', 'mainID']
+        pd_data.drop(drop_cols, axis=1, inplace=True)
+
+        line_num = pd_data.shape[0]
+
+        # 处理时间字段
+        pd_data = pd_data[(pd_data.UpdateTime < '2022-12-12') & (pd_data.UpdateTime > '2012-12-12')]
+        pd_data['UpdateTime'] = pd.to_datetime(pd_data.UpdateTime)
+        # 处理交易量字段
+        pd_data = pd_data[pd_data.LastVolume >= 0]
+
+        if line_num > 7000 and line_num != pd_data.shape[0]:
+            logger.info(f'[{self.path}]: after washing: {line_num}->{pd_data.shape[0]}.')
+
+        # pd_data['subID'] = pd_data.InstrumentID.str[-4:]
+
+        return pd_data, line_num
+
+
+# 因为tick文件存在一个文件包含多天的问题，所以需要拆分存储。
+# 可以看作是对原始数据的进一步处理。
+# 按交易时间段拆分，见`time_type`字段。
+class TickSplitPklFilesDoc(Document):
+    meta = {
+        'collection': 'tick_split_pkl_files',
+        'db_alias': 'ticks',
+        'index_background': True,
+        'auto_create_index': True,          # 每次操作都检查。TODO: Disabling this will improve performance.
+        'indexes': [
+            'InstrumentID',
+            'category',
+            # 'diff_sec',
+            'tags',
+            'day',
+            'isDominant',
+            'is2ndDominant',
+            # 'zip_line_num',
+        ]
+    }
+    file_doc = ReferenceField(TickFilesDoc)
+
+    MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
+    category = StringField()                # 合约品种: AU/AG/CU...
+    InstrumentID = StringField()            # 合约代码
+
+    tags = ListField(StringField())
+
+    data_type = StringField()               # tick/9999/0000/1day_k... subID: 9999表示主力dominant，0000表示指数index
+    # 下面的时间是计算出来的
+    year = StringField()                    # '2019'
+    month = StringField()                   # '201909'
+    day = StringField()                     # '20190925'
+    time_type = StringField()               # 日盘 / 夜盘。 fam(front of a.m.) / bam(back of a.m.) / pm(p.m.) / night
+
+    isDominant = BooleanField(default=False)        # 是否是主力合约：交易量（OpenInterest）最大
+    is2ndDominant = BooleanField(default=False)     # 是否是次主力合约：交易量大于当天最大交易量一半的合约
+
+    # tick数据的时间信息
+    start = DateTimeField()
+    end = DateTimeField()
+    diff_sec = IntField()
+
+    # # 原始文件
+    # path = StringField(unique=True)         # 存放相对路径
+    # size = IntField()                       # bytes
+    # line_num = IntField()
+
+    # pkl压缩文件
+    zip_path = StringField()                # 存放清理后的数据
+    zip_line_num = IntField()
+    zip_ver = IntField()
+
+    # stored = BooleanField(default=False)    # 暂时没有使用
+    # doc_num = IntField()
+
+    # 一些统计量
+    open = FloatField()
+    close = FloatField()
+    high = FloatField()
+    low = FloatField()
+    mean = FloatField()
+
+    OpenInterest = IntField()
+    Turnover = FloatField()                 # 成交总额
+    Turnover_calc = FloatField()            # 计算出来的成交总额：k1d_df['Turnover_new'] = (df.LastPrice * df.LastVolume * 10).resample('1d').sum()
+
+    volume_sum = IntField()                 # 总成交量
+
+    # @queryset_manager
+    # def wait_import(doc_cls, queryset):     # 增量添加了文件，但没有生成pkl文件
+    #     return queryset.filter(line_num=None)
+
+    @queryset_manager
+    def df_valid(doc_cls, queryset):        # 正常pkl化的数据
+        return queryset.filter(zip_path__ne=None, tags__ne='too_small')
+
+    @queryset_manager
+    def main(doc_cls, queryset):            # 主力
+        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['invalid_day', 'too_small'], isDominant=True)
+
+    @queryset_manager
+    def sub_main(doc_cls, queryset):        # 次主力
+        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['invalid_day', 'too_small'], is2ndDominant=True)
+
+    def __repr__(self):
+        return f'[{self.InstrumentID}][{self.day}][{self.time_type}]: zip_path={self.zip_path}, zip_line_num={self.zip_line_num}, tags={self.tags}, diff_sec={round(self.diff_sec/3600, 1)}h'
+
+    ###############################################
+    dst_root = Path('/ticks')
+
+    compression = 'zip'     # 测试下来读写性能综合考虑zip是最优的方法
+    # _zip_ver = 1
+
+    # # rel_file = None   # 相对路径，to save in db
+    # # abs_path = None   # 绝对路径，用于创建目录
+    # # _f_name = None     # 文件名
+    # # file = None       # 文件绝对路径
+    # @property
+    # def _rel_path(self):
+    #     return Path(f'{self.MarketID}/{self.category}/{self.InstrumentID}/{self.month}/')
+    # @property
+    # def abs_path(self):
+    #     return self.dst_root / self._rel_path
+    @property
+    def rel_file(self):
+        return self.zip_path
+    @property
+    def file(self):
+        return self.dst_root / self.rel_file
+    @property
+    def _f_name(self):
+        return self.file.name
+
+    # 检查zip文件是否存在
+    def zip_exists(self):
+        zip_exists = self.file.exists()
+        return zip_exists
+
+    # 删除zip文件
+    def del_zip(self):
+        _path = self.file
+        try:
+            while _path.exists():
+                if _path.is_dir():
+                    _path.rmdir()
+                else:
+                    _path.unlink()
+                _path = _path.parent
+        except Exception:
+            pass
+        self.file_doc.update(pull__tags='splited', set__doc_num=0)
+        self.delete()
+
+    # 加载ticks
+    def load_ticks(self):
+        if not self.zip_exists():
+            logger.warn(f'ERROR: Not Exists: {self!r}')
+            return None
+        _df = pd.read_pickle(self.file, compression=self.compression)
+        return _df
+
+    def _to_pkl(self, df):
+        # self.abs_path.mkdir(parents=True, exist_ok=True)
+        df.to_pickle(self.file, compression=self.compression)
