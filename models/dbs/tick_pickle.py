@@ -83,16 +83,18 @@ class PickleDbTick():
         return _df
 
     # 保存tick到pkl文件
-    def csv_to_pickle(self):
+    def csv_to_pickle(self, force=False):
         if self.tick_doc.MarketID == 3:         # 中金所不处理
             return
-
-        if 'empty_df' in self.tick_doc.tags or 'load_df_fail' in self.tick_doc.tags:        # self.tick_doc.diff_sec < 0
-            return
-
         pkl = PickleDbTick(self.tick_doc)
-        if pkl.zip_exists():
-            return
+
+        if not force:
+            if 'empty_df' in self.tick_doc.tags or 'load_df_fail' in self.tick_doc.tags:        # self.tick_doc.diff_sec < 0
+                logger.warn(f'Pls check tick_doc: tick_doc.tags={self.tick_doc.tags}')
+                return
+            if pkl.zip_exists():
+                logger.warn(f'Load df fail: path={self.tick_doc.path}')
+                return
 
         try:
             df, line_num = self._load_df_from_csv()
@@ -105,7 +107,7 @@ class PickleDbTick():
             return
 
         if df.empty:
-            # logger.error(f'df.empty error: {self.tick_doc.path}')
+            logger.error(f'df.empty error: {self.tick_doc.path}')
             self.tick_doc.update(add_to_set__tags='empty_df', set__doc_num=0)
             self.tick_doc.reload()
             return
@@ -124,27 +126,11 @@ class PickleDbTick():
         self.tick_doc.update(set__start=start, set__end=end, set__diff_sec=diff_sec)
         self.tick_doc.reload()
 
-        # _start = start + datetime.timedelta(seconds=-1)
-        # _end = end + datetime.timedelta(seconds=2)
-        # _night_s = datetime.datetime(_start.year, _start.month, _start.day, 20, 0)
-        # _night_e = datetime.datetime(_start.year, _start.month, _start.day+1, 4, 0)
-
-        # _fam_s = datetime.datetime(_end.year, _end.month, _end.day, 8, 0)
-        # _fam_e = datetime.datetime(_end.year, _end.month, _end.day, 10, 20)
-        # _mm = datetime.datetime(_end.year, _end.month, _end.day, 12, 0)
-        # _pm = datetime.datetime(_end.year, _end.month, _end.day, 18, 0)
-        # time_period = dict(
-        #     night=(_night_s, _night_e),
-        #     fam=(_fam_s, _fam_e),
-        #     bam=(_fam_s, _mm),
-        #     pm=(_mm, _pm),
-        # )
-
         # 将日夜盘交易时间拉会到同一天处理：
         #    09:00:00 -> 05:40:00
         #    10:15:00 -> 06:55:00
         #    10:30:00 -> 07:10:00
-        #    11:00:00 -> 07:40:00
+        #    11:30:00 -> 08:10:00
         #    13:30:00 -> 10:10:00
         #    15:00:00 -> 11:40:00
         #    21:00:00 -> 17:40:00
@@ -152,17 +138,17 @@ class PickleDbTick():
         df['UpdateTime_delay'] = df['UpdateTime'] + datetime.timedelta(hours=-3, minutes=-20)
         df['_UpdateTime_hour'] = df['UpdateTime_delay'].map(lambda x: (x.hour))
         time_period = dict(
-            fam=(4, 6),
-            bam=(6, 8),
-            pm=(8, 14),
-            night=(14, 24),
+            fam=(4, 6),     # 05:40:00 <= _ <= 06:55:00,    4 <= _ <= 6
+            bam=(7, 8),     # 07:10:00 <= _ <= 08:10:00,    7 <= _ <= 8
+            pm=(9, 14),     # 10:10:00 <= _ <= 11:40:00,    9 <= _ <= 14
+            night=(15, 24), # 17:40:00 <= _ <= 23:10:00,   15 <= _ <= 24
         )
 
         df['time_type'] = 'unknow'
         for _type, _time in time_period.items():
             _start, _end = _time
-            print(_type, _start, _end)
-            df.loc[(df._UpdateTime_hour >= _start) & (df._UpdateTime_hour < _end), ['time_type']] = _type
+            # print(_type, _start, _end)
+            df.loc[(df._UpdateTime_hour >= _start) & (df._UpdateTime_hour <= _end), ['time_type']] = _type
 
         unknow_num = df[df.time_type == 'unknow'].shape[0]
         if unknow_num:
