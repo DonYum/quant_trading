@@ -758,7 +758,10 @@ class TickSplitPklFilesDoc(Document):
     # zip_ver = IntField()
 
     # 特征文件
-    features_path = StringField()           # 提取特征后的文件
+    # feature_path = StringField()           # 提取特征后的文件保存路径
+    feature_files = ListField(StringField())           # 提取特征后的文件
+    feature_num = IntField()
+    feature_time = DateTimeField()
 
     # stored = BooleanField(default=False)    # 暂时没有使用
     # doc_num = IntField()
@@ -789,7 +792,7 @@ class TickSplitPklFilesDoc(Document):
         return queryset.filter(zip_path__ne=None, high__ne=None, tags__nin=['too_small'], is2ndDominant=True)
 
     def __repr__(self):
-        return f'[{self.InstrumentID}][{self.day}][{self.time_type}]: zip_path={self.zip_path}, zip_line_num={self.zip_line_num}, tags={self.tags}, diff_sec={round(self.diff_sec/3600, 1)}h'
+        return f'[{self.InstrumentID}][{self.day}][{self.time_type}]: zip_path={self.zip_path}, zip_line_num={self.zip_line_num}, tags={self.tags}, diff_sec={round(self.diff_sec/3600, 1)}h, feature_num={self.feature_num}'
 
     ###############################################
     dst_root = Path('/ticks')
@@ -804,11 +807,11 @@ class TickSplitPklFilesDoc(Document):
     def _f_name(self):
         return self.file.name
     @property
-    def feature_file(self):
-        return self.file.parent / f'{self.file.stem}_feature.pkl'
-    @property
-    def _feature_rel_path(self):        # 相对路径，写入数据库会用到
-        return self.file.relative_to(self.dst_root)
+    def feature_path(self):
+        return self.file.parent / f'{self.file.stem}_feature'
+    # @property
+    # def _feature_rel_path(self):        # 相对路径，写入数据库会用到
+    #     return self.file.relative_to(self.dst_root)
 
     # 检查zip文件是否存在
     def zip_exists(self):
@@ -817,6 +820,10 @@ class TickSplitPklFilesDoc(Document):
 
     # 删除zip文件
     def del_zip(self):
+        # 先删特征文件
+        self.reset_features()
+
+        # 删数据
         _path = self.file
         try:
             while _path.exists():
@@ -827,6 +834,7 @@ class TickSplitPklFilesDoc(Document):
                 _path = _path.parent
         except Exception:
             pass
+        # 处理存储信息
         self.file_doc.update(pull__tags='splited', set__doc_num=0)
         self.delete()
 
@@ -842,8 +850,26 @@ class TickSplitPklFilesDoc(Document):
     #     # self.abs_path.mkdir(parents=True, exist_ok=True)
     #     df.to_pickle(self.file, compression=self.compression)
 
-    def save_features(self, df):
-        # self.abs_path.mkdir(parents=True, exist_ok=True)
-        df.to_pickle(self.feature_file, compression=self.compression)
-        self.update(set__features_path=str(self._feature_rel_path))
+    def reset_features(self):
+        for _f in self.feature_files:
+            _path = self.feature_path / _f
+            try:
+                while _path.exists():
+                    if _path.is_dir():
+                        _path.rmdir()
+                    else:
+                        _path.unlink()
+                    _path = _path.parent
+            except Exception:
+                pass
+        self.update(set__feature_files=[], set__feature_num=0)
         self.reload()
+
+    def save_features(self, df, name):
+        self.feature_path.mkdir(parents=True, exist_ok=True)
+        df.to_pickle(self.feature_path/name, compression=self.compression)
+        self.update(push__feature_files=name, inc__feature_num=1, set__feature_time=datetime.datetime.now())
+        self.reload()
+
+    def load_feature(self):
+        pass
