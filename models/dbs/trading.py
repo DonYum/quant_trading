@@ -571,7 +571,7 @@ class TickFilesDoc(Document):
                 _rel_file = self._rel_path / __f_name   # to save in db
                 _file = self.abs_path / __f_name
 
-                _df = df[(df.UpdateTime_day==day) & (df.time_type==time_type)]
+                _df = df[(df.UpdateTime_day == day) & (df.time_type == time_type)]
                 if _df.empty:
                     continue
                 if _df.shape[0] < 200:
@@ -591,16 +591,16 @@ class TickFilesDoc(Document):
                 # 一些统计量
                 try:
                     statics_d = dict(
-                        zip_line_num = _df.shape[0],
-                        open = _df.iloc[0]['LastPrice'],
-                        close = _df.iloc[-1]['LastPrice'],
-                        high = _df['LastPrice'].max(),
-                        low = _df['LastPrice'].min(),
-                        mean = _df['LastPrice'].mean(),
+                        zip_line_num=_df.shape[0],
+                        open=_df.iloc[0]['LastPrice'],
+                        close=_df.iloc[-1]['LastPrice'],
+                        high=_df['LastPrice'].max(),
+                        low=_df['LastPrice'].min(),
+                        mean=_df['LastPrice'].mean(),
 
-                        OpenInterest = _df.iloc[-1]['OpenInterest'],
-                        # Turnover = _df.iloc[-1]['Turnover'],                 # 成交总额
-                        volume_sum = _df['LastVolume'].sum(),
+                        OpenInterest=_df.iloc[-1]['OpenInterest'],
+                        # Turnover=_df.iloc[-1]['Turnover'],                 # 成交总额
+                        volume_sum=_df['LastVolume'].sum(),
                     )
                 except Exception:
                     raise Exception(f'get statistic error: {self!r}')
@@ -608,24 +608,24 @@ class TickFilesDoc(Document):
                 _df.to_pickle(_file, compression=self.compression)
 
                 TickSplitPklFilesDoc(
-                    file_doc = self,
-                    MarketID = self.MarketID,
-                    category = self.category,
-                    InstrumentID = self.InstrumentID,
-                    data_type = self.data_type,
-                    isDominant = self.isDominant,
-                    is2ndDominant = self.is2ndDominant,
+                    file_doc=self,
+                    MarketID=self.MarketID,
+                    category=self.category,
+                    InstrumentID=self.InstrumentID,
+                    data_type=self.data_type,
+                    isDominant=self.isDominant,
+                    is2ndDominant=self.is2ndDominant,
 
-                    year = start.strftime('%Y'),
-                    month = start.strftime('%Y%m'),
-                    day = day,
-                    time_type = time_type,
+                    year=start.strftime('%Y'),
+                    month=start.strftime('%Y%m'),
+                    day=day,
+                    time_type=time_type,
 
-                    start = start,
-                    end = end,
-                    diff_sec = diff_sec,
+                    start=start,
+                    end=end,
+                    diff_sec=diff_sec,
 
-                    zip_path = str(_rel_file),
+                    zip_path=str(_rel_file),
                     **statics_d,
                 ).save()
 
