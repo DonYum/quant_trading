@@ -537,9 +537,9 @@ class TickFilesDoc(Document):
         df['time_type'] = 'unknow'
 
         time_period = dict(
-            fam=('09:00', '10:15'),
-            bam=('10:30', '11:30'),
-            pm=('13:00', '15:01'),
+            fam  =('09:00', '10:15'),
+            bam  =('10:30', '11:30'),
+            pm   =('13:00', '15:01'),
             night=('21:00', '03:00'),
         )
         for _type, _time in time_period.items():
