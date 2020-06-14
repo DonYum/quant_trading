@@ -3,8 +3,6 @@ import json
 import logging
 from collections import OrderedDict
 
-from ..dbs.trading import TickFilesDoc
-
 __all__ = ('get_doc_statics', )
 
 logger = logging.getLogger(__name__)
@@ -77,6 +75,7 @@ def get_doc_statics(query_filter, fields, document=None, unwind=None, sum_field=
 
 # Demo
 if '__main__' == __name__:
+    from ..dbs.trading import TickFilesDoc
     fields = {'InstrumentID': 0}
     unwind = []
     query_filter = dict(MarketID=4)
