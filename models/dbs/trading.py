@@ -3,6 +3,7 @@ import logging
 from mongoengine import *
 import pandas as pd
 from pathlib import Path
+from ..apis.apis import format_file_size, format_time
 from tqdm import tqdm_notebook as tqdm
 
 __all__ = (
@@ -399,18 +400,22 @@ class TickFilesDoc(Document):
 
     @queryset_manager
     def df_valid(doc_cls, queryset):        # 正常pkl化的数据
-        return queryset.filter(zip_path__ne=None, tags__ne='too_small')
+        return queryset.filter(tags__nin=['too_small', ])
+
+    @queryset_manager
+    def valid(doc_cls, queryset):        # 有意义的数据
+        return queryset.filter(tags__nin=['invalid_day', 'too_small', 'dup_time', 'time_no_ms'])
 
     @queryset_manager
     def main(doc_cls, queryset):            # 主力
-        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['invalid_day', 'too_small'], isDominant=True)
+        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['invalid_day', 'too_small', 'dup_time', 'time_no_ms'], isDominant=True)
 
     @queryset_manager
     def sub_main(doc_cls, queryset):        # 次主力
-        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['invalid_day', 'too_small'], is2ndDominant=True)
+        return queryset.filter(zip_path__ne=None, high__ne=None, subID__nin=['0000', '9999'], tags__nin=['invalid_day', 'too_small', 'dup_time', 'time_no_ms'], is2ndDominant=True)
 
     def __repr__(self):
-        return f'[{self.InstrumentID}-{self.day}]: path={self.path}, size={self.size}, line_num={self.line_num}, zip_line_num={self.zip_line_num}, tags={self.tags}, diff_sec={round(self.diff_sec/3600, 1)}h'
+        return f'[{self.InstrumentID}-{self.day}]: file={self.path}({format_file_size(self.size)}), {self.zip_line_num}/{self.line_num}, tags={self.tags}, time_len={format_time(self.diff_sec)}'
 
     ###############################################
     dst_root = Path('/ticks')
@@ -469,53 +474,13 @@ class TickFilesDoc(Document):
 
     # 按照日夜盘存储
     def save_splited(self):
+        if 'too_small' in self.tags or 'invalid_day' in self.tags:
+            return None
+
         df = self.load_ticks()
         if df is None or df.empty:
             logger.warn(f'ERROR: df not exists: {self!r}')
             return None
-
-        # 日夜盘切分
-        #   fam: 09:00 - 10:15, 1:15, 75' ,  ticks=9000
-        #   bam: 10:30 - 11:30, 1:00, 60' ,  ticks=7200
-        #    pm: 13:30 - 15:00, 1:30, 90' ,  ticks=10800
-        # night: 21:00 - 02:30, 5:00, 300',  ticks=36000
-
-        # 将日夜盘交易时间拉会到同一天处理：
-        #    09:00:00 -> 05:40:00
-        #    10:15:00 -> 06:55:00
-        #    10:30:00 -> 07:10:00
-        #    11:30:00 -> 08:10:00
-        #    13:30:00 -> 10:10:00
-        #    15:00:00 -> 11:40:00
-        #    21:00:00 -> 17:40:00
-        #    02:30:00 -> 23:10:00
-        df['UpdateTime_delay'] = df['UpdateTime'] + datetime.timedelta(hours=-3, minutes=-20)
-        df['_UpdateTime_hour'] = df['UpdateTime_delay'].map(lambda x: (x.hour))
-        time_period = dict(
-            fam=(4, 6),     # 05:40:00 <= _ <= 06:55:00,    4 <= _ <= 6
-            bam=(7, 8),     # 07:10:00 <= _ <= 08:10:00,    7 <= _ <= 8
-            pm=(9, 14),     # 10:10:00 <= _ <= 11:40:00,    9 <= _ <= 14
-            night=(15, 24), # 17:40:00 <= _ <= 23:10:00,   15 <= _ <= 24
-        )
-
-        df['time_type'] = 'unknow'
-        for _type, _time in time_period.items():
-            _start, _end = _time
-            df.loc[(df._UpdateTime_hour >= _start) & (df._UpdateTime_hour <= _end), ['time_type']] = _type
-
-        unknow_num = df[df.time_type == 'unknow'].shape[0]
-        if unknow_num:
-            logger.error(f'calc time_type error: {self!r}, unknow_num={unknow_num}')
-            # update_d = {**update_d, **dict(add_to_set__tags='time_error', set__doc_num=0)}
-            # self.update(**update_d)
-            # self.reload()
-            return
-
-        df['UpdateTime_day'] = df['UpdateTime_delay'].map(lambda x: x.strftime('%Y%m%d'))
-        df = df.drop(['UpdateTime_delay', '_UpdateTime_hour'], axis=1)
-
-        days = df['UpdateTime_day'].unique()
-        time_types = df['time_type'].unique()
 
         # 删除已经存在的数据
         __ticks = TickSplitPklFilesDoc.objects(file_doc=self)
@@ -525,6 +490,76 @@ class TickFilesDoc(Document):
             TickSplitPklFilesDoc.objects(file_doc=self).delete()
             # self.update(pull__tags='splited', set__doc_num=0)
             self.reload()
+
+        # 去重
+        _pre_shape = df.shape[0]
+        df = df.drop_duplicates()
+        _diff_shape = _pre_shape - df.shape[0]
+        if _diff_shape:
+            logger.info(f'DropDup, Droped={_diff_shape}, Left={df.shape[0]}: {self!r}')
+
+        # 对于早期数据，有时间上的问题，比如millisecond=1，参见：[AG1406][20140217]
+        # 这造成的问题是asfreq('500ms')得到一半无用数据，所以应该在数据源头做处理。
+        df = df.set_index('UpdateTime')
+        _ms = df.index.microsecond.value_counts().to_dict()
+        if set(_ms.keys()) ^ set([500000, 0]):
+            logger.info(f'Time.microsecond: {_ms}: {self!r}')
+            df.index = df.index.map(lambda x: x.replace(microsecond=500000) if x.microsecond != 0 else x)
+
+        _ms = df.index.microsecond.value_counts().to_dict()
+        if len(_ms) < 2:
+            logger.warn(f'Time.microsecond: {_ms}: {self!r}')
+            self.update(add_to_set__tags='time_no_ms')
+            self.reload()
+            return
+
+        # assert not (set(_ms.keys()) ^ set([500000, 0])), f'Time.microsecond Exception: {_ms}: {self!r}'
+
+        df = df.sort_index().reset_index()      # 排序、重置index
+        # 按时间去重
+        _pre_shape = df.shape[0]
+        df = df.drop_duplicates('UpdateTime', keep='first')
+        _diff_shape = _pre_shape - df.shape[0]
+        if _diff_shape:
+            logger.info(f'DropDupByTime, Droped={_diff_shape}, Left={df.shape[0]}: {self!r}')
+        if _diff_shape > 100:
+            logger.warn(f'DropDupByTime: Drop too many, set Invalid. {self!r}')
+            self.update(add_to_set__tags='dup_time')
+            self.reload()
+            return
+
+        # 日夜盘切分
+        #   fam: 09:00 - 10:15, 1:15, 75' ,  ticks=9000
+        #   bam: 10:30 - 11:30, 1:00, 60' ,  ticks=7200
+        #    pm: 13:30 - 15:00, 1:30, 90' ,  ticks=10800
+        # night: 21:00 - 02:30, 5:00, 300',  ticks=36000
+        df = df.set_index('UpdateTime')
+        df['time_type'] = 'unknow'
+
+        time_period = dict(
+            fam=('09:00', '10:15'),
+            bam=('10:30', '11:30'),
+            pm=('13:00', '15:01'),
+            night=('21:00', '03:00'),
+        )
+        for _type, _time in time_period.items():
+            _start, _end = _time
+            df.loc[df.between_time(_start, _end).index, 'time_type'] = _type
+
+        unknow_num = df[df.time_type == 'unknow'].shape[0]
+        if unknow_num:
+            logger.error(f'calc time_type error: {self!r}, unknow_num={unknow_num}')
+            # update_d = {**update_d, **dict(add_to_set__tags='time_error', set__doc_num=0)}
+            # self.update(**update_d)
+            # self.reload()
+            return
+
+        df['UpdateTime_delay'] = df['UpdateTime'] + datetime.timedelta(hours=-3, minutes=-20)
+        df['UpdateTime_day'] = df['UpdateTime_delay'].map(lambda x: x.strftime('%Y%m%d'))
+        df = df.drop(['UpdateTime_delay'], axis=1)
+
+        days = df['UpdateTime_day'].unique()
+        time_types = df['time_type'].unique()
 
         # logger.info(f'DELETE({cnt}): {self!r}')
 
@@ -539,6 +574,10 @@ class TickFilesDoc(Document):
                 _df = df[(df.UpdateTime_day==day) & (df.time_type==time_type)]
                 if _df.empty:
                     continue
+                if _df.shape[0] < 200:
+                    continue
+
+                _df = _df.sort_values('UpdateTime')     # 一定要排序！！！
 
                 start = _df['UpdateTime'].min()
                 end = _df['UpdateTime'].max()
@@ -550,18 +589,21 @@ class TickFilesDoc(Document):
                     continue
 
                 # 一些统计量
-                statics_d = dict(
-                    zip_line_num = _df.shape[0],
-                    open = _df.iloc[0]['LastPrice'],
-                    close = _df.iloc[-1]['LastPrice'],
-                    high = _df['LastPrice'].max(),
-                    low = _df['LastPrice'].min(),
-                    mean = _df['LastPrice'].mean(),
+                try:
+                    statics_d = dict(
+                        zip_line_num = _df.shape[0],
+                        open = _df.iloc[0]['LastPrice'],
+                        close = _df.iloc[-1]['LastPrice'],
+                        high = _df['LastPrice'].max(),
+                        low = _df['LastPrice'].min(),
+                        mean = _df['LastPrice'].mean(),
 
-                    OpenInterest = _df.iloc[-1]['OpenInterest'],
-                    Turnover = _df.iloc[-1]['Turnover'],                 # 成交总额
-                    volume_sum = _df['LastVolume'].sum(),
-                )
+                        OpenInterest = _df.iloc[-1]['OpenInterest'],
+                        # Turnover = _df.iloc[-1]['Turnover'],                 # 成交总额
+                        volume_sum = _df['LastVolume'].sum(),
+                    )
+                except Exception:
+                    raise Exception(f'get statistic error: {self!r}')
 
                 _df.to_pickle(_file, compression=self.compression)
 
@@ -637,6 +679,9 @@ class TickFilesDoc(Document):
             self.reload()
             return
 
+        if df.shape[0] < 200:
+            update_d['add_to_set__tags'] = 'too_small'
+
         update_d = {**update_d, **dict(set__start=start, set__end=end, set__diff_sec=diff_sec)}
         # self.update(set__start=start, set__end=end, set__diff_sec=diff_sec)
         # self.reload()
@@ -697,7 +742,7 @@ class TickFilesDoc(Document):
         pd_data = pd_data[pd_data.LastVolume >= 0]
 
         if line_num > 7000 and line_num != pd_data.shape[0]:
-            logger.info(f'[{self.path}]: after washing: {line_num}->{pd_data.shape[0]}.')
+            logger.info(f'[{self!r}]: after washing: {line_num}->{pd_data.shape[0]}.')
 
         # pd_data['subID'] = pd_data.InstrumentID.str[-4:]
 
@@ -792,7 +837,7 @@ class TickSplitPklFilesDoc(Document):
         return queryset.filter(zip_path__ne=None, high__ne=None, tags__nin=['too_small'], is2ndDominant=True)
 
     def __repr__(self):
-        return f'[{self.InstrumentID}][{self.day}][{self.time_type}]: zip_path={self.zip_path}, zip_line_num={self.zip_line_num}, tags={self.tags}, diff_sec={round(self.diff_sec/3600, 1)}h, feature_num={self.feature_num}'
+        return f'[{self.InstrumentID}-{self.day}-{self.time_type}]: file={self.zip_path}, {self.zip_line_num}, tags={self.tags}, time_len={format_time(self.diff_sec)}, f_num={self.feature_num}'
 
     ###############################################
     dst_root = Path('/ticks')
