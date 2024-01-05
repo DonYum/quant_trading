@@ -4,11 +4,10 @@ from mongoengine import *
 import pandas as pd
 from pathlib import Path
 from ..apis.apis import format_file_size, format_time
+from .conf import *
 from tqdm import tqdm_notebook as tqdm
 
 __all__ = (
-        'STORED_CATEGORY_LIST', 'KLINE_BINS_LIST',
-        'get_dyn_ticks_doc', 'get_dyn_dominant_ticks_doc', 'KlineDoc', 'StatisDayDoc',
         'TickFilesDoc', 'ModelException', 'TickSplitPklFilesDoc',
     )
 
@@ -34,304 +33,10 @@ KLINE_BINS_LIST = ['3min', '5min', '15min', '30min', '1H', '2H']
 class ModelException(Exception):
     pass
 
-
-# tick数据集。实现分表存储。
-def get_dyn_ticks_doc(_collection_name):
-    if _collection_name not in STORED_CATEGORY_LIST:
-        raise Exception(f'Can not get ticks table[{_collection_name}].')
-
-    class TicksDoc(Document):
-        meta = {
-            'collection': f'ticks_{_collection_name}',
-            'db_alias': 'ticks',
-            'index_background': True,
-            'auto_create_index': True,          # 每次操作都检查。TODO: Disabling this will improve performance.
-            'indexes': [
-                'InstrumentID',
-                'MarketID',
-                'LastPrice',
-                'LastVolume',
-                'UpdateTime',
-                'day',
-                'time_type',
-                'tags',
-            ]
-        }
-        # id = SequenceField(db_alias='ticks', primary_key=True)
-
-        InstrumentID = StringField()            # 合约代码
-        # category = StringField()                # 合约品种
-        subID = StringField()                   # 子代码(日期)
-        MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
-
-        LastPrice = FloatField()                # 最新价
-        LastVolume = FloatField()    # 现量
-
-        UpdateTime = DateTimeField()
-        hhmmss = StringField()                  # 时间(6位，时分秒 hhmmss)
-        day = StringField()                     # 日期(8位，yyyymmdd)，InstrumentID+day可以索引到TickFiles里面的信息。
-        time_type = StringField()                   # 日盘 / 夜盘。 fam(front of a.m.) / bam(back of a.m.) / pm(p.m.) / night
-        tags = ListField(StringField())         # 标记信息
-
-        AskPrice1 = FloatField()
-        AskVolume1 = IntField()
-        BidPrice1 = FloatField()
-        BidVolume1 = IntField()
-        # AskPrice2 = FloatField()              # 只有上期所股指期货IF才会有五档数据，其他的只有一档数据
-        # AskVolume2 = IntField()
-        # BidPrice2 = FloatField()
-        # BidVolume2 = IntField()
-        # AskPrice3 = FloatField()
-        # AskVolume3 = IntField()
-        # BidPrice3 = FloatField()
-        # BidVolume3 = IntField()
-        # AskPrice4 = FloatField()
-        # AskVolume4 = IntField()
-        # BidPrice4 = FloatField()
-        # BidVolume4 = IntField()
-        # AskPrice5 = FloatField()
-        # AskVolume5 = IntField()
-        # BidPrice5 = FloatField()
-        # BidVolume5 = IntField()
-
-        OpenInterest = IntField()               # 持仓量
-        Turnover = FloatField()                 # 成交总额
-        AvePrice = FloatField()                 # 均价
-        # invol = IntField()                    # 内盘
-        # outvol = IntField()                   # 外盘
-        # Attr1 = IntField()                    # 性质1(多开1,多换2,空平3,空开4,空换5,多平6)
-        # Volume1 = IntField()
-        # Attr2 = IntField()
-        # Volume2 = IntField()                  # 数量2(多开1,多换2,空平3,空开4,空换5,多平6)
-
-        HighestPrice = FloatField()             # 最高价
-        LowestPrice = FloatField()              # 最低价
-        # SettlePrice = FloatField()              # 结算价
-        OpenPrice = FloatField()                # 开盘价
-        # Reserved = StringField()
-        # fill = StringField()
-
-        # @queryset_manager
-        # def valid(doc_cls, queryset):
-        #     return queryset.filter(status__ne='drop')
-
-        @classmethod
-        def get_cat(cls):
-            return _collection_name
-
-        @classmethod
-        def get_mkt(cls):
-            mkts = cls.objects().distinct('MarketID')
-            if len(mkts) != 1:
-                raise ModelException(f'[{_collection_name}]: MarketID({mkts}) is invalid!')
-            return mkts[0]
-
-        @classmethod
-        def get_ids(cls, q_f={}):
-            return cls.objects(**q_f).distinct('InstrumentID')
-
-    TicksDoc.get_mkt()
-
-    return TicksDoc
-
-
-# 主力合约(dominant contract) tick数据集。实现分表存储。
-# 没必要单独存储！！！在`KlineDoc`中加`isDominant`字段即可。
-def get_dyn_dominant_ticks_doc(_collection_name):
-    if _collection_name not in STORED_CATEGORY_LIST:
-        raise Exception(f'Can not get d_ticks table[{_collection_name}].')
-
-    class TicksDoc(Document):
-        meta = {
-            'collection': f'd_ticks_{_collection_name}',
-            'db_alias': 'd_ticks',
-            'index_background': True,
-            'auto_create_index': True,          # 每次操作都检查。TODO: Disabling this will improve performance.
-            'indexes': [
-                'InstrumentID',
-                'MarketID',
-                'LastPrice',
-                'LastVolume',
-                'UpdateTime',
-                'tags',
-            ]
-        }
-        # id = SequenceField(db_alias='ticks', primary_key=True)
-
-        InstrumentID = StringField()            # 合约代码
-        # category = StringField()              # 合约品种
-        subID = StringField()                   # 子代码(日期)
-        time_type = StringField()               # 日盘 / 夜盘
-        MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
-
-        LastPrice = FloatField()                # 最新价
-        LastVolume = FloatField()    # 现量
-
-        hhmmss = StringField()                  # 时间(6位,时分秒 hhmmss)
-        UpdateTime = DateTimeField()
-        tags = ListField(StringField())         # 标记信息
-
-        AskPrice1 = FloatField()
-        AskVolume1 = IntField()
-        BidPrice1 = FloatField()
-        BidVolume1 = IntField()
-
-        OpenInterest = IntField()               # 持仓量
-        Turnover = FloatField()                 # 成交总额
-        AvePrice = FloatField()                 # 均价
-
-        HighestPrice = FloatField()             # 最高价
-        LowestPrice = FloatField()              # 最低价
-        # SettlePrice = FloatField()            # 结算价
-        OpenPrice = FloatField()                # 开盘价
-
-        # @queryset_manager
-        # def valid(doc_cls, queryset):
-        #     return queryset.filter(status__ne='drop')
-
-    return TicksDoc
-
-
-# K线数据集。没必要分表存储。
-class KlineDoc(Document):
-    meta = {
-        'collection': 'kline_tab',
-        'db_alias': 'kline',
-        'index_background': True,
-        'auto_create_index': True,          # 每次操作都检查。TODO: Disabling this will improve performance.
-        'indexes': [
-            'TradingTime',
-            'InstrumentID',
-            'level',
-            'category',
-            'MarketID',
-            'TotalVolume',
-            'isDominant',
-        ]
-    }
-    TradingTime = DateTimeField()
-
-    InstrumentID = StringField()            # 合约代码
-    level = StringField()                   # K线粒度
-    category = StringField()                # 合约品种
-    time_type = StringField()               # 日盘 / 夜盘
-    MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
-
-    isDominant = BooleanField(default=False)    # 是否是主力合约
-
-    TotalVolume = FloatField()              # 总成交量
-    volume_std = FloatField()               # 成交量std
-
-    # hhmmss = StringField()                # 时间(6位,时分秒 hhmmss)
-
-    open = FloatField()                 # 开盘价
-    high = FloatField()                 # 最高价
-    low = FloatField()                  # 最低价
-    close = FloatField()                # 收盘价
-
-    OpenPrice = FloatField()            # 开盘价
-    HighestPrice = FloatField()         # 最高价
-    LowestPrice = FloatField()          # 最低价
-    # SettlePrice = FloatField()        # 收盘价
-
-    # Volume1 = IntField()              # 成交量
-    OpenInterest = IntField()           # 持仓量
-    Turnover = FloatField()             # 成交总额
-    Turnover_new = FloatField()         # 计算出来的成交总额：k1d_df['Turnover_new'] = (df.LastPrice * df.LastVolume * 10).resample('1d').sum()
-    AvePrice = FloatField()             # 均价
-
-    tick_num = IntField()               # Ticks数量
-
-    # invol = IntField()                # 内盘
-    # outvol = IntField()               # 外盘
-    # Attr1 = IntField()                # 性质1(多开1,多换2,空平3,空开4,空换5,多平6)
-    # Attr2 = IntField()
-    # Volume2 = IntField()              # 数量2(多开1,多换2,空平3,空开4,空换5,多平6)
-
-    # @queryset_manager
-    # def valid(doc_cls, queryset):
-    #     return queryset.filter(status__ne='drop')
-
-
-class StatisDayDoc(Document):
-    meta = {
-        'collection': 'day_related',
-        'db_alias': 'statistic',
-        'index_background': True,
-        'auto_create_index': True,          # 每次操作都检查。TODO: Disabling this will improve performance.
-        'indexes': [
-            'TradingTime',
-            'InstrumentID',
-            'category',
-            'MarketID',
-            'TotalVolume',
-            'tags',
-            'isDominant',
-        ]
-    }
-    # id = SequenceField(db_alias='ticks', primary_key=True)
-
-    TradingTime = DateTimeField()           # 时间，日
-
-    InstrumentID = StringField()            # 合约代码
-    category = StringField()                # 合约品种
-    time_type = StringField()               # 日盘 / 夜盘
-    MarketID = IntField()                   # 市场代码(上证1, 深证2, 中金所3, 上期4, 郑商5, 大商6)
-
-    isDominant = BooleanField(default=False)    # 是否是主力合约
-
-    TotalVolume = FloatField()                  # 总成交量
-    volume_std = FloatField()                   # 成交量std
-
-    # LastPrice = FloatField()                  # 最新价
-    # LastVolume = FloatField(default=0.0)      # 现量
-
-    # OHLC结果
-    open = FloatField()                 # 开盘价
-    high = FloatField()                 # 最高价
-    low = FloatField()                  # 最低价
-    close = FloatField()                # 收盘价
-
-    # ticks数据里统计到的值，和OHLC数据有出入。实际应用看情况使用。
-    OpenPrice = FloatField()                # 开盘价
-    HighestPrice = FloatField()             # 最高价
-    LowestPrice = FloatField()              # 最低价
-    # SettlePrice = FloatField()            # 收盘价
-
-    OpenInterest = IntField()               # 持仓量 ***
-    Turnover = FloatField()                 # 成交总额
-    Turnover_new = FloatField()             # 计算出来的成交总额：k1d_df['Turnover_new'] = (df.LastPrice * df.LastVolume * 10).resample('1d').sum()
-    AvePrice = FloatField()                 # 均价
-
-    tags = ListField(StringField())         # 标记信息
-    tick_num = IntField()                   # Ticks数量
-
-    # @queryset_manager
-    # def valid(doc_cls, queryset):
-    #     return queryset.filter(status__ne='drop')
-
-
-class StatisInstrumentDoc(Document):
-    meta = {
-        'collection': 'statis_instrument',
-        'db_alias': 'statistic',
-        'index_background': True,
-        'auto_create_index': True,          # 每次操作都检查。TODO: Disabling this will improve performance.
-        'indexes': [
-            'InstrumentID',
-            'category',
-            # 'MarketID',
-        ]
-    }
-    InstrumentID = StringField(primary_key=True)    # 合约代码
-    category = StringField()                    # 合约品种
-    # plate = StringField()                     # 日盘 / 夜盘
-
-    tick_num = IntField()                       #
-    highest_price = FloatField()                #
-
-
 class TickFilesDoc(Document):
+    '''
+    Tick文件记录，存放在Mongo中。
+    '''
     meta = {
         'collection': 'tick_files',
         'db_alias': 'ticks',
@@ -353,7 +58,7 @@ class TickFilesDoc(Document):
     InstrumentID = StringField()            # 合约代码
     subID = StringField()                   # 子代码(日期)，从InstrumentID中提取。
 
-    tags = ListField(StringField())
+    tags = ListField(StringField())         # ['invalid_day', 'too_small', 'dup_time', 'time_no_ms']
 
     data_type = StringField()               # tick/9999/0000/1day_k... subID: 9999表示主力dominant，0000表示指数index
     year = StringField()                    # '2019'
@@ -394,6 +99,7 @@ class TickFilesDoc(Document):
 
     volume_sum = IntField()                 # 总成交量
 
+    ###############################################
     @queryset_manager
     def wait_import(doc_cls, queryset):     # 增量添加了文件，但没有生成pkl文件
         return queryset.filter(line_num=None)
@@ -418,11 +124,11 @@ class TickFilesDoc(Document):
         return f'[{self.InstrumentID}-{self.day}]: file={self.path}({format_file_size(self.size)}), {self.zip_line_num}/{self.line_num}, tags={self.tags}, time_len={format_time(self.diff_sec)}'
 
     ###############################################
-    dst_root = Path('/ticks')
-    src_root = Path('/data/tick')
+    # dst_root = Path('/data/ticks')
+    # src_root = Path('/data/raw_data')
 
-    compression = 'zip'     # 测试下来读写性能综合考虑zip是最优的方法
-    _zip_ver = 1
+    # compression = 'zip'     # 测试下来读写性能综合考虑zip是最优的方法
+    # _zip_ver = 1
 
     # rel_file = None   # 相对路径，to save in db
     # abs_path = None   # 绝对路径，用于创建目录
@@ -433,10 +139,10 @@ class TickFilesDoc(Document):
         return Path(f'{self.MarketID}/{self.category}/{self.InstrumentID}/{self.month}/')
     @property
     def abs_path(self):
-        return self.dst_root / self._rel_path
+        return TICKS_PATH / self._rel_path
     @property
     def _f_name(self):
-        return f'{self.InstrumentID}_{self.day}_{self._zip_ver}.pkl'
+        return f'{self.InstrumentID}_{self.day}_{PICKLE_COMPRESSION_VER}.pkl'
     @property
     def rel_file(self):
         return self._rel_path / self._f_name   # to save in db
@@ -469,10 +175,10 @@ class TickFilesDoc(Document):
         if not self.zip_exists():
             logger.warn(f'ERROR: Not Exists: {self!r}')
             return None
-        _df = pd.read_pickle(self.file, compression=self.compression)
+        _df = pd.read_pickle(self.file, compression=PICKLE_COMPRESSION)
         return _df
 
-    # 按照日夜盘存储
+    # 按照日夜盘存储，暂未使用
     def save_splited(self):
         if 'too_small' in self.tags or 'invalid_day' in self.tags:
             return None
@@ -567,7 +273,7 @@ class TickFilesDoc(Document):
         for day in days:
             for time_type in time_types:
                 # 相关路径的计算
-                __f_name = f'{self.InstrumentID}_{self.day}_{self._zip_ver}_{day}_{time_type}.pkl'
+                __f_name = f'{self.InstrumentID}_{self.day}_{PICKLE_COMPRESSION_VER}_{day}_{time_type}.pkl'
                 _rel_file = self._rel_path / __f_name   # to save in db
                 _file = self.abs_path / __f_name
 
@@ -605,7 +311,7 @@ class TickFilesDoc(Document):
                 except Exception:
                     raise Exception(f'get statistic error: {self!r}')
 
-                _df.to_pickle(_file, compression=self.compression)
+                _df.to_pickle(_file, compression=PICKLE_COMPRESSION)
 
                 TickSplitPklFilesDoc(
                     file_doc=self,
@@ -689,7 +395,7 @@ class TickFilesDoc(Document):
         # save pickle
         self._to_pkl(df)
         # self.abs_path.mkdir(parents=True, exist_ok=True)
-        # df.to_pickle(self.file, compression=self.compression)
+        # df.to_pickle(self.file, compression=PICKLE_COMPRESSION)
 
         # update tick_doc
         update_d = {**update_d, **dict(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file), pull__tags='time_error')}
@@ -698,11 +404,11 @@ class TickFilesDoc(Document):
 
     def _to_pkl(self, df):
         self.abs_path.mkdir(parents=True, exist_ok=True)
-        df.to_pickle(self.file, compression=self.compression)
+        df.to_pickle(self.file, compression=PICKLE_COMPRESSION)
 
     # 从源数据中加载数据
     def _load_df_from_csv(self):
-        tmpPath = self.src_root / self.path
+        tmpPath = RAW_DATA_PATH / self.path
         pd_data = pd.read_csv(
                     tmpPath,
                     names=['InstrumentID', 'MarketID', 'LastPrice', 'LastVolume', 'hhmmss', 'Reserved', 'UpdateTime', 'AskPrice1',
@@ -713,30 +419,31 @@ class TickFilesDoc(Document):
                     low_memory=False, parse_dates=['UpdateTime'], dtype={'hhmmss': str}, error_bad_lines=False, warn_bad_lines=False
                 )
 
-        drop_cols = [
-                        # 'AskPrice1', 'AskVolume1', 'BidPrice1', 'BidVolume1',
-                        'AskPrice2', 'AskVolume2', 'BidPrice2', 'BidVolume2',
-                        'AskPrice3', 'AskVolume3', 'BidPrice3', 'BidVolume3',
-                        'AskPrice4', 'AskVolume4', 'BidPrice4', 'BidVolume4',
-                        'AskPrice5', 'AskVolume5', 'BidPrice5', 'BidVolume5',
-                        'Reserved', 'invol', 'outvol',
-                        'Attr1', 'Volume1', 'Attr2', 'Volume2',
-                        'fill',
-                    ]
+        # TODO: 先不要删，观察下这些特征
+        # drop_cols = [
+        #                 # 'AskPrice1', 'AskVolume1', 'BidPrice1', 'BidVolume1',
+        #                 'AskPrice2', 'AskVolume2', 'BidPrice2', 'BidVolume2',
+        #                 'AskPrice3', 'AskVolume3', 'BidPrice3', 'BidVolume3',
+        #                 'AskPrice4', 'AskVolume4', 'BidPrice4', 'BidVolume4',
+        #                 'AskPrice5', 'AskVolume5', 'BidPrice5', 'BidVolume5',
+        #                 'Reserved', 'invol', 'outvol',
+        #                 'Attr1', 'Volume1', 'Attr2', 'Volume2',
+        #                 'fill',
+        #             ]
 
-        # 删掉不需要的列
-        if self.subID == '0000':           # 指数
-            drop_cols += ['HighestPrice', 'LowestPrice', 'OpenPrice', 'SettlePrice', 'Turnover', 'AvePrice', 'mainID']
-        elif self.subID == '9999':         # 主力
-            drop_cols += ['SettlePrice']
-        else:                                       # ticks
-            drop_cols += ['SettlePrice', 'mainID']
-        pd_data.drop(drop_cols, axis=1, inplace=True)
+        # # 删掉不需要的列
+        # if self.subID == '0000':           # 指数
+        #     drop_cols += ['HighestPrice', 'LowestPrice', 'OpenPrice', 'SettlePrice', 'Turnover', 'AvePrice', 'mainID']
+        # elif self.subID == '9999':         # 主力
+        #     drop_cols += ['SettlePrice']
+        # else:                                       # ticks
+        #     drop_cols += ['SettlePrice', 'mainID']
+        # pd_data.drop(drop_cols, axis=1, inplace=True)
 
         line_num = pd_data.shape[0]
 
         # 处理时间字段
-        pd_data = pd_data[(pd_data.UpdateTime < '2022-12-12') & (pd_data.UpdateTime > '2012-12-12')]
+        pd_data = pd_data[(pd_data.UpdateTime < MAX_DATE) & (pd_data.UpdateTime > MIN_DATE)]
         pd_data['UpdateTime'] = pd.to_datetime(pd_data.UpdateTime)
         # 处理交易量字段
         pd_data = pd_data[pd_data.LastVolume >= 0]
@@ -842,12 +549,12 @@ class TickSplitPklFilesDoc(Document):
     ###############################################
     dst_root = Path('/ticks')
 
-    compression = 'zip'     # 测试下来读写性能综合考虑zip是最优的方法
+    # compression = 'zip'     # 测试下来读写性能综合考虑zip是最优的方法
     # _zip_ver = 1
 
     @property
     def file(self):
-        return self.dst_root / self.zip_path
+        return TICKS_PATH / self.zip_path
     @property
     def _f_name(self):
         return self.file.name
@@ -856,7 +563,7 @@ class TickSplitPklFilesDoc(Document):
         return self.file.parent / f'{self.file.stem}_feature'
     # @property
     # def _feature_rel_path(self):        # 相对路径，写入数据库会用到
-    #     return self.file.relative_to(self.dst_root)
+    #     return self.file.relative_to(TICKS_PATH)
 
     # 检查zip文件是否存在
     def zip_exists(self):
@@ -888,12 +595,12 @@ class TickSplitPklFilesDoc(Document):
         if not self.zip_exists():
             logger.warn(f'ERROR: Not Exists: {self!r}')
             return None
-        _df = pd.read_pickle(self.file, compression=self.compression)
+        _df = pd.read_pickle(self.file, compression=PICKLE_COMPRESSION)
         return _df
 
     # def _to_pkl(self, df):
     #     # self.abs_path.mkdir(parents=True, exist_ok=True)
-    #     df.to_pickle(self.file, compression=self.compression)
+    #     df.to_pickle(self.file, compression=PICKLE_COMPRESSION)
 
     def reset_features(self):
         for _f in self.feature_files:
@@ -912,7 +619,7 @@ class TickSplitPklFilesDoc(Document):
 
     def save_features(self, df, name):
         self.feature_path.mkdir(parents=True, exist_ok=True)
-        df.to_pickle(self.feature_path/name, compression=self.compression)
+        df.to_pickle(self.feature_path/name, compression=PICKLE_COMPRESSION)
         self.update(push__feature_files=name, inc__feature_num=1, set__feature_time=datetime.datetime.now())
         self.reload()
 

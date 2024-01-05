@@ -7,17 +7,7 @@ import numpy as np
 import pandas as pd
 from mongoengine import *
 
-# import dask
-# import dask.dataframe as dd
-# import dask.array as da
-# from dask.diagnostics import ProgressBar
-
 from models import *
-
-# 配置dask
-# dask.config.set(scheduler='processes')
-# pbar = ProgressBar()
-# pbar.register()
 
 # 设置logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(name)s: %(levelname)s: %(message)s',
@@ -25,7 +15,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s: %(name)s: %(levelna
 logger = logging.getLogger()
 
 # 连接数据库
-URI_ticks = 'mongodb://127.0.0.1:6007/ticks'
+URI_ticks = 'mongodb://ticks:11112222@mongodb:27017/ticks'
 # URI_kline = 'mongodb://127.0.0.1:6007/kline'
 connect(host=URI_ticks,  alias='ticks')
 # connect(host=URI_kline,  alias='kline')
@@ -66,8 +56,8 @@ if __name__ == "__main__":
     cat = 'HC'
     d_doc = get_dyn_ticks_doc(cat)
 
-    for year in ['2014', '2015', '2016', '2017', '2018_whole']:
-        base_dir = Path(f'/home/history_data/tick/{year}/4/{cat}/')
+    for year in ['2022']:
+        base_dir = Path(f'/data/tick_data/{year}/4/{cat}/')
         if not base_dir.exists():
             continue
 

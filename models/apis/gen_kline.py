@@ -4,7 +4,7 @@ import pandas as pd
 from pandas.tseries.offsets import *
 from tqdm import tqdm_notebook as tqdm
 
-from ..dbs.trading import *
+from ..dbs.tick_file_doc import *
 from .apis import *
 
 __all__ = ('load_ticks_by_id', 'gen_kline_from_pd', 'save_kline_by_id', 'save_1day_kline_by_id', 'calc_kline_by_id', 'load_kline_to_df', 'load_1day_kline_to_df', )

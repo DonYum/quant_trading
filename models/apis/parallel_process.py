@@ -1,7 +1,7 @@
 import os
 import time
 import logging
-from ..dbs.trading import *
+from ..dbs.tick_file_doc import *
 
 __all__ = ('process_imgs', 'parallel_process_grps', )
 

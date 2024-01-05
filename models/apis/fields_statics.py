@@ -75,7 +75,7 @@ def get_doc_statics(query_filter, fields, document=None, unwind=None, sum_field=
 
 # Demo
 if '__main__' == __name__:
-    from ..dbs.trading import TickFilesDoc
+    from ..dbs.tick_file_doc import TickFilesDoc
     fields = {'InstrumentID': 0}
     unwind = []
     query_filter = dict(MarketID=4)

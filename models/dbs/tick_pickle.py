@@ -3,7 +3,8 @@ import logging
 import pandas as pd
 from pathlib import Path
 from tqdm import tqdm_notebook as tqdm
-from .trading import TickFilesDoc
+from .tick_file_doc import TickFilesDoc
+from .conf import *
 
 __all__ = (
         'PickleDbTick', 'PickleDbTicks',
@@ -26,28 +27,23 @@ class PickleDbException(Exception):
 # 入库的方法：
 #   - 先生成TickFilesDoc，然后使用`PickleDbTick(tick_doc).csv_to_pickle()`保存。
 class PickleDbTick():
-    def __init__(self, tick_doc, dst_root='/ticks', src_root='/data/tick', zip_ver=1):
+    def __init__(self, tick_doc):
         self.tick_doc = tick_doc
-        self.dst_root = Path(dst_root)
-        self.src_root = Path(src_root)
-
-        self.compression = 'zip'     # 测试下来读写性能综合考虑zip是最优的方法
-        self.zip_ver = zip_ver
 
         self.rel_file = None   # 相对路径，to save in db
         self.file = None       # 绝对路径
         if tick_doc.zip_path:
             self.rel_file = Path(tick_doc.zip_path)   # 相对路径，to save in db
             self._rel_path = self.rel_file.parent
-            self.abs_path = self.dst_root / self._rel_path
+            self.abs_path = TICKS_PATH / self._rel_path
             self.f_name = self.rel_file.name
             self.file = self.abs_path / self.f_name
         else:
             # mkt / cat / 合约 / day / f'{合约}_{day}_{zip_ver}.pkl'
             # 4/AG/AG1401/20140108/AG1401_20140108_1.pkl
             self._rel_path = Path(f'{tick_doc.MarketID}/{tick_doc.category}/{tick_doc.InstrumentID}/{tick_doc.month}/')
-            self.abs_path = self.dst_root / self._rel_path
-            self.f_name = f'{tick_doc.InstrumentID}_{tick_doc.day}_{self.zip_ver}.pkl'
+            self.abs_path = TICKS_PATH / self._rel_path
+            self.f_name = f'{tick_doc.InstrumentID}_{tick_doc.day}_{PICKLE_COMPRESSION_VER}.pkl'
             self.rel_file = self._rel_path / self.f_name   # to save in db
             self.file = self.abs_path / self.f_name
 
@@ -79,7 +75,7 @@ class PickleDbTick():
             if self.tick_doc.zip_path and 'empty_df' not in self.tick_doc.tags:
                 logger.error(f'ERROR: tick[{self.tick_doc.pk}] has not stored, but file[{self.tick_doc.zip_path}] exists!')
             return None
-        _df = pd.read_pickle(self.file, compression=self.compression)
+        _df = pd.read_pickle(self.file, compression=PICKLE_COMPRESSION)
         return _df
 
     # 保存tick到pkl文件
@@ -162,19 +158,19 @@ class PickleDbTick():
         # save pickle
         self._to_pkl(df)
         # self.abs_path.mkdir(parents=True, exist_ok=True)
-        # df.to_pickle(self.file, compression=self.compression)
+        # df.to_pickle(self.file, compression=PICKLE_COMPRESSION)
 
         # update tick_doc
-        self.tick_doc.update(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file), zip_ver=self.zip_ver)
+        self.tick_doc.update(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file), zip_ver=PICKLE_COMPRESSION_VER)
         self.tick_doc.reload()
 
     def _to_pkl(self, df):
         self.abs_path.mkdir(parents=True, exist_ok=True)
-        df.to_pickle(self.file, compression=self.compression)
+        df.to_pickle(self.file, compression=PICKLE_COMPRESSION)
 
     # 从源数据中加载数据
     def _load_df_from_csv(self):
-        tmpPath = self.src_root / self.tick_doc.path
+        tmpPath = RAW_DATA_PATH / self.tick_doc.path
         pd_data = pd.read_csv(
                     tmpPath,
                     names=['InstrumentID', 'MarketID', 'LastPrice', 'LastVolume', 'hhmmss', 'Reserved', 'UpdateTime', 'AskPrice1',
@@ -208,7 +204,7 @@ class PickleDbTick():
         line_num = pd_data.shape[0]
 
         # 处理时间字段
-        pd_data = pd_data[(pd_data.UpdateTime < '2022-12-12') & (pd_data.UpdateTime > '2012-12-12')]
+        pd_data = pd_data[(pd_data.UpdateTime < MAX_DATE) & (pd_data.UpdateTime > MIN_DATE)]
         pd_data['UpdateTime'] = pd.to_datetime(pd_data.UpdateTime)
         # 处理交易量字段
         pd_data = pd_data[pd_data.LastVolume >= 0]
