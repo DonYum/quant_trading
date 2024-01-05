@@ -4,7 +4,6 @@ from mongoengine import *
 # import pandas as pd
 # from pathlib import Path
 # from ..apis.apis import format_file_size, format_time
-# from .conf import TICKS_PATH, RAW_DATA_PATH, PICKLE_COMPRESSION, PICKLE_COMPRESSION_VER
 # from tqdm import tqdm_notebook as tqdm
 
 __all__ = (

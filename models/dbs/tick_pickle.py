@@ -43,7 +43,7 @@ class PickleDbTick():
             # 4/AG/AG1401/20140108/AG1401_20140108_1.pkl
             self._rel_path = Path(f'{tick_doc.MarketID}/{tick_doc.category}/{tick_doc.InstrumentID}/{tick_doc.month}/')
             self.abs_path = TICKS_PATH / self._rel_path
-            self.f_name = f'{tick_doc.InstrumentID}_{tick_doc.day}_{PICKLE_COMPRESSION_VER}.pkl'
+            self.f_name = f'{tick_doc.InstrumentID}_{tick_doc.day}.pkl'
             self.rel_file = self._rel_path / self.f_name   # to save in db
             self.file = self.abs_path / self.f_name
 
@@ -161,7 +161,7 @@ class PickleDbTick():
         # df.to_pickle(self.file, compression=PICKLE_COMPRESSION)
 
         # update tick_doc
-        self.tick_doc.update(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file), zip_ver=PICKLE_COMPRESSION_VER)
+        self.tick_doc.update(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file))
         self.tick_doc.reload()
 
     def _to_pkl(self, df):
