@@ -67,9 +67,9 @@ SSD盘
 原始的MongoDB存储方案已废弃，新方案使用pickle zip方式。使用方法如下：
 
 ```python
-q_f = dict(InstrumentID='AG1812')
-ticks = PickleDbTicks(q_f)
-df = ticks.get_ticks()
+q_f = dict(InstrumentID='AG1812', tags=[])
+ticks = PickleDbTicks(q_f, main_cls='')
+df = ticks.load_ticks()
 ```
 
 ### 主力（9999）
@@ -77,7 +77,7 @@ df = ticks.get_ticks()
 ```python
 q_f = dict(InstrumentID='AG9999')
 ticks = PickleDbTicks(q_f)
-df = ticks.get_ticks()
+df = ticks.load_ticks()
 ```
 
 ### 指数（0000）

@@ -5,6 +5,7 @@ import pandas as pd
 from pathlib import Path
 from ..apis.apis import format_file_size, format_time
 from .conf import *
+from .utils import delete_file
 from tqdm import tqdm_notebook as tqdm
 
 __all__ = (
@@ -36,6 +37,16 @@ class ModelException(Exception):
 class TickFilesDoc(Document):
     '''
     Tick文件记录，存放在Mongo中。
+
+    tags:
+        - empty_df: 空数据集
+        - load_df_fail: 加载数据出错
+        - col_error: 列不全
+        - invalid_day: 日期不在范围内
+        - diff_sec_error: 日期格式存在错误
+        - too_small: 文件太小
+        - dup_time: 
+        - time_no_ms: 
     '''
     meta = {
         'collection': 'tick_files',
@@ -58,7 +69,7 @@ class TickFilesDoc(Document):
     InstrumentID = StringField()            # 合约代码
     subID = StringField()                   # 子代码(日期)，从InstrumentID中提取。
 
-    tags = ListField(StringField())         # ['invalid_day', 'too_small', 'dup_time', 'time_no_ms']
+    tags = ListField(StringField())         # ['empty_df', 'load_df_fail', 'col_error', 'invalid_day', 'diff_sec_error', 'too_small', 'dup_time', 'time_no_ms']
 
     data_type = StringField()               # tick/9999/0000/1day_k... subID: 9999表示主力dominant，0000表示指数index
     year = StringField()                    # '2019'
@@ -80,7 +91,8 @@ class TickFilesDoc(Document):
 
     # pkl压缩文件
     zip_path = StringField()                # 存放清理后的数据
-    zip_line_num = IntField()
+    zip_line_num = IntField(default=0)
+    column_num = IntField(default=0)
     zip_ver = IntField(default=1)
 
     stored = BooleanField(default=False)    # 暂时没有使用
@@ -148,28 +160,39 @@ class TickFilesDoc(Document):
         return zip_exists
 
     # 删除zip文件
-    def del_zip(self):
-        _path = self.file
-        try:
-            while _path.exists():
-                if _path.is_dir():
-                    _path.rmdir()
-                else:
-                    _path.unlink()
-                _path = _path.parent
-        except Exception:
-            pass
-        self.update(set__zip_line_num=0, set__zip_path=None)
-        self.reload()
+    def del_zip(self, update_doc=False):
+        delete_file(self.file)
+        if update_doc:
+            self.update(set__zip_line_num=0, set__zip_path=None)
+
+    # 删除原始文件
+    def del_raw_file(self):
+        delete_file(RAW_DATA_PATH / self.path)
+
+    # 删除doc和zip文件
+    def del_doc_and_zip(self):
+        self.del_zip(update_doc=False)
+        self.delete()
 
     # 加载ticks
     def load_ticks(self):
         if not self.zip_exists():
             if self.zip_path and 'empty_df' not in self.tags:
                 logger.error(f'ERROR: tick[{self.pk}] has not stored, but file[{self.zip_path}] exists!')
-            return None
+            return pd.DataFrame([])
         _df = pd.read_pickle(self.file, compression=PICKLE_COMPRESSION)
         return _df
+
+    # 加载ticks.
+    # TODO: 测试
+    def map_df(self, func):
+        df = self.load_ticks()
+        row_num = df.shape[0]
+        df = func(df)
+        assert row_num == df.shape[0], f'[{self}] 处理前后行数不一致！'
+        self._to_pkl(df)
+        self.update(set__column_num=len(df.columns))
+        return df
 
     # 按照日夜盘存储，暂未使用
     def save_splited(self):
@@ -330,11 +353,11 @@ class TickFilesDoc(Document):
 
                 cnt += 1
         self.update(add_to_set__tags='splited', set__doc_num=cnt)
-        self.reload()
+        # self.reload()
 
     # 保存tick到pkl文件
     def csv_to_pickle(self, force=False):
-        if self.MarketID == 3:         # 中金所不处理
+        if self.MarketID == 3:         # 中金所不处理，处理方式和其他不一样
             return
 
         update_d = dict(set__doc_num=0)
@@ -346,8 +369,6 @@ class TickFilesDoc(Document):
             if self.zip_exists():
                 logger.warn(f'pkl already exists: {self!r}')
                 return
-            
-        update_d = {**update_d, **dict(set__start=start, set__end=end, set__diff_sec=diff_sec)}
 
         try:
             df, line_num = self._load_df_from_csv()
@@ -355,13 +376,18 @@ class TickFilesDoc(Document):
         except Exception:
             logger.error(f'Load df fail: {self!r}')
             self.update(add_to_set__tags='load_df_fail')
-            self.reload()
+            # self.reload()
             return
 
         if df.empty:
             logger.error(f'df.empty error: {self!r}')
             self.update(add_to_set__tags='empty_df', set__doc_num=0)
-            self.reload()
+            # self.reload()
+            return
+        if len(df.columns) < 40:
+            logger.error(f'df parse col error: {self!r}')
+            self.update(add_to_set__tags='col_error', set__doc_num=0)
+            # self.reload()
             return
 
         # 处理时间信息
@@ -376,7 +402,7 @@ class TickFilesDoc(Document):
         except Exception:
             logger.error(f'calc diff_sec error: {self!r}, {start}, {end}')
             self.update(add_to_set__tags='diff_sec_error', set__doc_num=0, **update_d)
-            self.reload()
+            # self.reload()
             return
 
         # 将日夜盘交易时间拉会到同一天处理：
@@ -407,7 +433,7 @@ class TickFilesDoc(Document):
         if unknow_num:
             logger.error(f'calc time_type error: {self!r}, unknow_num={unknow_num}')
             self.update(add_to_set__tags='time_error', set__doc_num=0, **update_d)
-            self.reload()
+            # self.reload()
             return
 
         df = df.drop(['UpdateTime_delay', '_UpdateTime_hour'], axis=1)
@@ -420,7 +446,7 @@ class TickFilesDoc(Document):
 
         # update tick_doc
         self.update(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file), **update_d)
-        self.reload()
+        # self.reload()
         return self
 
     def _to_pkl(self, df):
@@ -437,7 +463,8 @@ class TickFilesDoc(Document):
                            'AskPrice3', 'AskVolume3', 'BidPrice3', 'BidVolume3', 'AskPrice4', 'AskVolume4', 'BidPrice4', 'BidVolume4',
                            'AskPrice5', 'AskVolume5', 'BidPrice5', 'BidVolume5', 'OpenInterest', 'Turnover', 'AvePrice', 'invol', 'outvol',
                            'Attr1', 'Volume1', 'Attr2', 'Volume2', 'HighestPrice', 'LowestPrice', 'SettlePrice', 'OpenPrice', 'mainID', 'fill'],
-                    low_memory=False, parse_dates=['UpdateTime'], dtype={'hhmmss': str}, error_bad_lines=False, warn_bad_lines=False
+                    low_memory=False, parse_dates=['UpdateTime'], dtype={'hhmmss': str}
+                    # low_memory=False, parse_dates=['UpdateTime'], dtype={'hhmmss': str}, error_bad_lines=False, warn_bad_lines=False
                 )
 
         # TODO: 先不要删，观察下这些特征

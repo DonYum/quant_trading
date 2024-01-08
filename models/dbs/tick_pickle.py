@@ -237,8 +237,11 @@ class PickleDbTicks():
         with tqdm(total=self.total, desc=f'Progress:') as pbar:
             for tick in self.ticks:
                 pbar.update(1)
-                pkl = PickleDbTick(tick)
-                _df = pkl.load_ticks()
+                # pkl = PickleDbTick(tick)
+                _df = tick.load_ticks()
+                if _df.empty:
+                    logger.warning(f'{tick.path} load df fail.')
+                    continue
                 _df['day'] = tick.day
 
                 df_l.append(_df)
