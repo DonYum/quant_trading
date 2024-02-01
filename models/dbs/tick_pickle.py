@@ -229,12 +229,12 @@ class PickleDbTicks():
             self.ticks = TickFilesDoc.objects(**q_f)
         self.total = self.ticks.count()
 
-        logger.info(f'total={self.total}')
+        # logger.info(f'total={self.total}')
 
     # 加载`q_f`筛选到的数据
-    def load_ticks(self):
+    def load_ticks(self, with_clean=True):
         df_l = []
-        with tqdm(total=self.total, desc=f'Progress:') as pbar:
+        with tqdm(total=self.total, desc=f'Progress:', disable=True) as pbar:
             for tick in self.ticks:
                 pbar.update(1)
                 # pkl = PickleDbTick(tick)
@@ -248,6 +248,30 @@ class PickleDbTicks():
 
         # df.sort_values('UpdateTime', inplace=True)
         df = pd.concat(df_l, sort=False)
+
+        # clean df
+        if with_clean:
+            drop_cols = [
+                # 'InstrumentID', 'MarketID', 'mainID', 'day',
+                # 'AskPrice2', 'AskPrice3', 'AskPrice4', 'AskPrice5',
+                # 'AskVolume2', 'AskVolume3', 'AskVolume4', 'AskVolume5',
+                # 'BidPrice2', 'BidPrice3', 'BidPrice4', 'BidPrice5',
+                # 'BidVolume2', 'BidVolume3', 'BidVolume4', 'BidVolume5',
+                'hhmmss',
+                'Reserved',
+                'Attr1', 'Volume1',
+                'Attr2', 'Volume2',
+                'AvePrice',
+                'OpenPrice', 'HighestPrice', 'LowestPrice',
+                'SettlePrice',
+                'invol', 'outvol',
+                'fill',
+            ]
+            df = df.drop(drop_cols, axis=1)
+            for col in ['InstrumentID', 'MarketID', 'mainID', 'day', 'time_type']:
+                df[col] = df[col].astype('category')
+
+        df.sort_values('UpdateTime', inplace=True)
         return df
 
     # 从`TickFilesDoc`加载日K

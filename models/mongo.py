@@ -9,12 +9,12 @@ __all__ = ('conn_mongo', 'conn_protect', )
 
 # 连接数据库
 # _sock = '127.0.0.1:6007'
-_sock = '192.168.9.13:6007'
-_auth = 'eric:11112222'
+_sock = 'mongodb:27017'
+_auth = 'ticks:11112222'
 
 _conn_map = {}
-for _doc in ['ticks', 'd_ticks', 'kline', 'statistic']:
-    _host = f'mongodb://{_auth}@{_sock}/{_doc}?authSource=admin'
+for _doc in ['ticks']:      # , 'd_ticks', 'kline', 'statistic'
+    _host = f'mongodb://{_auth}@{_sock}/{_doc}'
     _conn_map[_doc] = _host
 
 

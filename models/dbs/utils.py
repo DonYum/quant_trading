@@ -1,7 +1,7 @@
 from pathlib import Path
 
 
-def delete_file(file_or_dir: Path, recursion: bool=False):
+def delete_file(file_or_dir: Path, recursion: bool=True):
     try:
         while file_or_dir.exists():
             if file_or_dir.is_dir():

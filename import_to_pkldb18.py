@@ -21,7 +21,7 @@ URI_ticks = 'mongodb://ticks:11112222@mongodb:27017/ticks'
 connect(host=URI_ticks,  alias='ticks')
 
 
-year = '2019'
+year = '2018'
 mkt = '3'
 cat = "*"
 # import_cats = ['RR']

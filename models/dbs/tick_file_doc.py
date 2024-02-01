@@ -160,10 +160,10 @@ class TickFilesDoc(Document):
         return zip_exists
 
     # 删除zip文件
-    def del_zip(self, update_doc=False):
+    def del_zip(self, update_doc=True):
         delete_file(self.file)
         if update_doc:
-            self.update(set__zip_line_num=0, set__zip_path=None)
+            self.update(set__zip_path=None)     # set__zip_line_num=0,
 
     # 删除原始文件
     def del_raw_file(self):
@@ -357,7 +357,10 @@ class TickFilesDoc(Document):
 
     # 保存tick到pkl文件
     def csv_to_pickle(self, force=False):
-        if self.MarketID == 3:         # 中金所不处理，处理方式和其他不一样
+        # TODO: 缺少2019之后市场3的数据
+        if self.MarketID != 3:         # 中金所不处理，处理方式和其他不一样
+            return
+        if self.subID != '9999':
             return
 
         update_d = dict(set__doc_num=0)
@@ -384,7 +387,11 @@ class TickFilesDoc(Document):
             self.update(add_to_set__tags='empty_df', set__doc_num=0)
             # self.reload()
             return
-        if len(df.columns) < 40:
+        if df.shape[0] < 200:
+            logger.error(f'df.empty error: {self!r}')
+            self.update(add_to_set__tags='too_small', set__zip_line_num=df.shape[0], set__doc_num=0)
+            return
+        if len(df.columns) < 10:
             logger.error(f'df parse col error: {self!r}')
             self.update(add_to_set__tags='col_error', set__doc_num=0)
             # self.reload()
@@ -447,7 +454,7 @@ class TickFilesDoc(Document):
         # update tick_doc
         self.update(set__zip_line_num=df.shape[0], set__zip_path=str(self.rel_file), **update_d)
         # self.reload()
-        return self
+        # return self
 
     def _to_pkl(self, df):
         self.abs_path.mkdir(parents=True, exist_ok=True)

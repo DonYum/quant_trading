@@ -2,7 +2,8 @@ import os
 import time
 import logging
 
-__all__ = ('chunks_from_array', 'chunks_from_array_by_size', 'sample_arr_by_fix_step', 'Dbg_Timer', )
+# __all__ = ('chunks_from_array', 'chunks_from_array_by_size', 'sample_arr_by_fix_step', 'Dbg_Timer', )
+__all__ = ('Dbg_Timer', )
 
 logger = logging.getLogger(__name__)
 
